@@ -1,7 +1,9 @@
 package com.gym.pass.support.web;
 
+import com.gym.pass.domain.branch.BranchRepository;
 import com.gym.pass.domain.exception.CommonException;
 import com.gym.pass.domain.exception.ErrorCode;
+import lombok.RequiredArgsConstructor;
 import org.springframework.core.MethodParameter;
 import org.springframework.stereotype.Component;
 import org.springframework.web.bind.support.WebDataBinderFactory;
@@ -9,11 +11,14 @@ import org.springframework.web.context.request.NativeWebRequest;
 import org.springframework.web.method.support.HandlerMethodArgumentResolver;
 import org.springframework.web.method.support.ModelAndViewContainer;
 
-/** X-Branch-Id 헤더를 지점 ID로 해석한다 (D-10 · NFR-1). */
+/** X-Branch-Id 헤더를 지점 ID로 해석하고 지점 존재를 확인한다 (D-10 · NFR-1). */
 @Component
+@RequiredArgsConstructor
 public class BranchIdArgumentResolver implements HandlerMethodArgumentResolver {
 
     public static final String HEADER = "X-Branch-Id";
+
+    private final BranchRepository branchRepository;
 
     @Override
     public boolean supportsParameter(MethodParameter parameter) {
@@ -26,7 +31,8 @@ public class BranchIdArgumentResolver implements HandlerMethodArgumentResolver {
             ModelAndViewContainer mavContainer,
             NativeWebRequest webRequest,
             WebDataBinderFactory binderFactory) {
-        return parse(webRequest.getHeader(HEADER));
+        Long branchId = parse(webRequest.getHeader(HEADER));
+        return branchRepository.getById(branchId).getId();
     }
 
     private static Long parse(String header) {
