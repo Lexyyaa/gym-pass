@@ -6,7 +6,7 @@
 > - API: [04](design/04-api-spec.md)
 >
 
-**현재:** F2 / T2-1
+**현재:** F2 / T2-2
 
 ## 규칙
 
@@ -72,7 +72,7 @@
 
 ## F2. 회원·회원권 등록 `feature/registration` — FR-2.1 ~ FR-2.4
 
-- [ ] T2-1 `feat: Member·Membership 애그리거트·종료일 계산 및 seed 구현` — FR-2.1 · FR-2.2 · FR-2.4 · FR-5.5 · 03 §9 member·membership 행 대조 완료 체크
+- [x] T2-1 `feat: Member·Membership 애그리거트·종료일 계산 및 seed 구현` — FR-2.1 · FR-2.2 · FR-2.4 · FR-5.5 · 03 §9 member·membership 행 대조 완료 체크
 - [ ] T2-2 `feat: 회원·회원권 등록 API 구현` — FR-2.3 · API-1 · API-2
 - [ ] T2-3 `test: 등록 성공·실패 케이스` — TC-2-01 · TC-2-02 · TC-2-05 · TC-2-07 · TC-2-08 · TC-2-09 · TC-2-11 · TC-2-12 · TC-2-13
 - [ ] T2-4 `test: 종료일 계산·재등록 경계 엣지 케이스` — TC-2-03 · TC-2-04 · TC-2-10

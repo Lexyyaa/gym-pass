@@ -33,6 +33,11 @@ public class Phone {
         return new Phone(value);
     }
 
+    /** 사용자 입력을 BusinessException으로 먼저 막을 때 쓴다 (D-22). */
+    public static boolean isValid(String value) {
+        return value != null && FORMAT.matcher(value).matches();
+    }
+
     @Override
     public boolean equals(Object o) {
         return o instanceof Phone other && Objects.equals(value, other.value);

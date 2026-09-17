@@ -478,8 +478,8 @@ sequenceDiagram
 | 테이블 | 원문 행 수 | data.sql 행 수 | 대조 완료 |
 |---|---|---|---|
 | `branch` | (원문 표 없음) | 2 | [x] |
-| `member` | (원문 표 없음) | 4 | [ ] |
-| `membership` | (원문 표 없음) | 4 | [ ] |
+| `member` | (원문 표 없음) | 4 | [x] |
+| `membership` | (원문 표 없음) | 4 | [x] |
 
 **data.sql 구성 (데모 시나리오용)**
 
