@@ -4,15 +4,15 @@
 > 수정·요약·재배치하지 않는다. 오탈자도 고치지 않는다.
 
 - 이 문서는 요구사항 ID(`FR`·`NFR`·`SUB`)를 부여하는 유일한 기준이다
-  - → [01-requirements.md](01-requirements.md)
+  - → [02-requirements.md](02-requirements.md)
 - 기초 데이터 표는 seed(`data.sql`)와 **항목 단위로 대조하는 기준**이다
-  - → [02-domain-model.md §9](02-domain-model.md)
-- 해석이 필요한 문장은 여기서 고치지 말고 01의 "모호한 점과 결정"에 남긴다
+  - → [03-domain-model.md §9](03-domain-model.md)
+- 해석이 필요한 문장은 여기서 고치지 말고 02의 "모호한 점과 결정"에 남긴다
 
 ## 과제 정보
 
 <!--
-제출 관련 항목은 01 §4 SUB의 출처가 된다.
+제출 관련 항목은 02 §4 SUB의 출처가 된다.
 시작 시각은 task_list에 적는다.
 -->
 

@@ -1,8 +1,8 @@
 # API 명세
 
 > 아래 두 문서를 HTTP 계약으로 옮긴다.
-> - 요구사항([01-requirements.md](01-requirements.md))
-> - 도메인([02-domain-model.md](02-domain-model.md))
+> - 요구사항([02-requirements.md](02-requirements.md))
+> - 도메인([03-domain-model.md](03-domain-model.md))
 >
 > 도메인 에러 코드도 여기서 관리한다.
 

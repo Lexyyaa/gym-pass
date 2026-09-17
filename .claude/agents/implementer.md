@@ -25,7 +25,7 @@ tools: Read, Write, Edit, Grep, Glob, Bash
 1. 구현한다
    - 규칙은 `src/main/CLAUDE.md`를 따른다
    - 테스트는 `src/test/CLAUDE.md`를 따른다
-2. `01-requirements.md`의 TC 표에 있는 케이스를 그대로 테스트로 옮긴다
+2. `02-requirements.md`의 TC 표에 있는 케이스를 그대로 테스트로 옮긴다
    - `@DisplayName("[TC-x-yy] ...")` 형식을 지킨다
    - TC 표에 없는 케이스가 필요하면 만들되, 보고에 "TC 추가 제안"으로 남긴다
 3. `./gradlew spotlessApply build`를 통과시킨다
@@ -42,8 +42,8 @@ tools: Read, Write, Edit, Grep, Glob, Bash
 
 ## seed를 구현할 때
 
-- `data.sql`은 `02` §9와 `00` 기초 데이터 표를 한 행씩 대조하며 쓴다
-- 끝나면 `02` §9 표의 대조 완료 칸을 체크한다
+- `data.sql`은 `03` §9와 `00` 기초 데이터 표를 한 행씩 대조하며 쓴다
+- 끝나면 `03` §9 표의 대조 완료 칸을 체크한다
 
 ## 멈추고 돌아올 때
 

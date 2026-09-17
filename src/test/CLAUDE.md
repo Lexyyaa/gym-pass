@@ -1,7 +1,7 @@
 # src/test 테스트 규칙
 
 `src/test` 아래 파일을 읽을 때 루트 CLAUDE.md와 함께 로드된다.
-테스트 케이스의 원본은 `docs/design/01-requirements.md`의 TC 표다.
+테스트 케이스의 원본은 `docs/design/02-requirements.md`의 TC 표다.
 여기에 없는 케이스를 만들었다면 TC 표에 추가를 제안한다.
 
 ## 이름과 위치
