@@ -121,8 +121,9 @@
 | 메서드 | 하는 일 | 실패 시 | 관련 FR |
 |---|---|---|---|
 | `register(...)` | 입력 규칙 검사 · 종료일 계산 · `months` 저장 후 ACTIVE 생성 | `MEMBERSHIP_INVALID_INPUT` 400 (D-22 · D-23) | FR-2.2 · FR-2.4 |
-| `validateEntry(today)` | 날짜 · 유효 정지 구간 · 잔여를 직접 검사해 출입 가능 판정 | `ATTENDANCE_` 계열 409 | FR-3.2 · FR-4.4 |
-| `deduct(today)` | 횟수제 잔여 1 차감 + `DEDUCTED` 이력, 잔여 0 도달 시 EXPIRED 전이 | `MEMBERSHIP_` 계열 4xx | FR-3.3 |
+| `verifyBranch(branchId)` | 판정 대상 회원권의 소속 지점과 헤더 지점 비교 | `BRANCH_FORBIDDEN` 403 | FR-3.2 · NFR-1 |
+| `validateEntry(today, deductedToday)` | 날짜 · 유효 정지 구간 · 잔여 · 오늘 차감 여부를 직접 검사해 출입 가능 판정 | `ATTENDANCE_` 계열 409 | FR-3.2 · FR-4.4 |
+| `deduct(today)` | 횟수제 잔여 1 차감 + `DEDUCTED` 이력, 잔여 0이어도 상태 유지 (D-27) | `ATTENDANCE_NO_VALID_MEMBERSHIP` 409 | FR-3.3 |
 | `pause(startDate, days, today)` | 상한 · 겹침 · 상태 검사 후 정지 등록, 종료일 += days, `PAUSED` 이력, 시작일 = 오늘이면 PAUSED 전이 | `PAUSE_` 계열 4xx | FR-4.1~4.3 |
 | `releasePause(pauseId, today)` | 조기 해제, 미사용 일수만큼 종료일 되돌림, `RESUMED` 이력, 상태 재판정(§4) | `PAUSE_` 계열 4xx | FR-4.2 |
 | `cancel(today)` | ACTIVE · PAUSED에서만 CANCELED 전이, `CANCELED` 이력 | `MEMBERSHIP_` 계열 4xx | FR-7.4 |
@@ -137,6 +138,18 @@
     - 상한 수치는 `application.yml` 정책 값 — 서비스가 읽어 `register(...)`에 넘긴다 (C-34)
   - 시작일 < 1000-01-01 (C-33)
   - 계산된 종료일 > 9999-12-31
+- 출입 흐름의 호출 순서: `verifyBranch` → `validateEntry` → (오늘 첫 차감이면) `deduct` (§8)
+- `verifyBranch(branchId)`
+  - 유효 판정보다 먼저 호출한다 — 타 지점 회원권은 유효 여부와 무관하게 403이다
+- `validateEntry(today, deductedToday)` 판정 (D-27)
+  - 시작일 ≤ 오늘 ≤ 종료일 — 위반 시 `ATTENDANCE_NO_VALID_MEMBERSHIP`
+  - 오늘이 유효 정지 구간 밖 — 위반 시 `ATTENDANCE_MEMBERSHIP_PAUSED`
+  - 횟수제는 잔여 ≥ 1 **또는** `deductedToday` — 위반 시 `ATTENDANCE_NO_VALID_MEMBERSHIP`
+  - `deductedToday` = 오늘(KST) `deducted=true` 출입 기록 존재 여부
+- `deduct(today)`
+  - 잔여 0 · `EXPIRED` · `CANCELED`에서 호출하면 `ATTENDANCE_NO_VALID_MEMBERSHIP` 409
+    - API 경로에서는 `validateEntry`가 먼저 막는다 (차감 실패 전용 코드 없음, 04 §4)
+  - 잔여가 0이 돼도 상태를 바꾸지 않는다 — 다음 00:00 상태 동기화 배치가 `EXPIRED`로 바꾼다 (D-27)
 
 **불변식** (서비스의 if문이 아니라 이 애그리거트가 스스로 지킨다)
 - `startDate ≥ 1000-01-01` (D-23, MySQL DATE 보장 범위)
@@ -146,6 +159,8 @@
 - `months`는 항상 값이 있다 — 기간제 = 요청 개월, 횟수제 = 6 (D-24)
 - 기간제는 횟수 값을, 횟수제는 요청 개월 값을 받지 않는다 (D-23)
 - 횟수제 `remainingCount ≥ 0`, 기간제는 null
+- 잔여 0에서는 차감이 불가하다
+- 횟수제 잔여 0이어도 상태는 `ACTIVE` · `PAUSED` 그대로다 — `EXPIRED` 전이는 상태 동기화 배치만 한다 (D-27)
 - 정지 횟수 ≤ 3회, 누적 정지 일수 ≤ `months` × 7일, 1회 최소 1일 (D-2 · D-24, 계산 기준은 아래 `MembershipPause`)
 - 정지 기간은 서로 겹치지 않는다 (FR-4.1 상세 정책)
   - 겹침은 유효 정지 구간(아래)으로 판정한다
@@ -159,7 +174,7 @@
   - 해제되지 않은 정지: `startDate` ~ `endDate` (양끝 포함)
   - 해제된 정지: `startDate` ~ `releasedDate` (해제 당일 포함)
   - 시작 전 해제(`releasedDate < startDate`)는 빈 구간이다
-  - `validateEntry(today)`는 today가 어떤 정지의 유효 구간에 들면 `ATTENDANCE_MEMBERSHIP_PAUSED`로 거부한다
+  - `validateEntry(today, deductedToday)`는 today가 어떤 정지의 유효 구간에 들면 `ATTENDANCE_MEMBERSHIP_PAUSED`로 거부한다
     - 조기 해제 당일도 거부되고, 출입은 다음 날부터다 (TC-4-12)
 - "오늘을 포함하는 정지" = 유효 정지 구간에 오늘이 드는 정지 (§4 전이 조건에서 쓴다)
 - 사용(실제 정지) 일수 = 해제된 정지의 유효 구간 일수 (D-8 · TC-4-07, [04 API-5](04-api-spec.md)와 동일 규칙)
@@ -222,12 +237,12 @@
 ```mermaid
 stateDiagram-v2
     [*] --> ACTIVE : register()
-    ACTIVE --> ACTIVE : pause() 미래 예약 / 시작 전 releasePause()
+    ACTIVE --> ACTIVE : pause() 미래 예약 / 시작 전 releasePause() / deduct()
     ACTIVE --> PAUSED : pause() 시작일 오늘 / 동기화 배치
-    PAUSED --> PAUSED : pause() 추가 예약 / releasePause() 다른 정지 진행 중
+    PAUSED --> PAUSED : pause() 추가 예약 / releasePause() 다른 정지 진행 중 / deduct()
     PAUSED --> ACTIVE : releasePause() / 동기화 배치
-    ACTIVE --> EXPIRED : 동기화 배치 / deduct() 잔여 0
-    PAUSED --> EXPIRED : 동기화 배치
+    ACTIVE --> EXPIRED : 동기화 배치 - 종료일 경과 또는 잔여 0
+    PAUSED --> EXPIRED : 동기화 배치 - 종료일 경과 또는 잔여 0
     ACTIVE --> CANCELED : cancel()
     PAUSED --> CANCELED : cancel()
     EXPIRED --> [*]
@@ -245,8 +260,9 @@ stateDiagram-v2
 | PAUSED | PAUSED | `releasePause()` | 해제 대상을 제외한, 오늘을 포함하는 정지가 남음 | `PAUSE_` 계열 4xx |
 | PAUSED | ACTIVE | `releasePause()` | 해제 대상을 제외한, 오늘을 포함하는 정지가 없음 | `PAUSE_` 계열 4xx |
 | PAUSED | ACTIVE | 상태 동기화 배치 (00:00) | 어제로 끝난 정지만 있고 오늘을 포함하는 정지가 없음 (D-21) | — |
+| ACTIVE · PAUSED | ACTIVE · PAUSED (전이 없음) | `deduct()` | 오늘 첫 차감, 잔여 ≥ 1 — 잔여 0이 돼도 상태 유지 (D-27) | `ATTENDANCE_NO_VALID_MEMBERSHIP` 409 |
 | ACTIVE · PAUSED | EXPIRED | 상태 동기화 배치 (00:00) | 종료일 < 오늘 (D-21) | — |
-| ACTIVE | EXPIRED | `deduct()` | 차감으로 잔여 0 도달 | — |
+| ACTIVE · PAUSED | EXPIRED | 상태 동기화 배치 (00:00) | 횟수제 잔여 0 (D-27) | — |
 | ACTIVE · PAUSED | CANCELED | `cancel()` | 만료 · 취소 아님 (H-11) | `MEMBERSHIP_` 계열 4xx |
 
 - 구체 에러 코드는 [04-api-spec.md](04-api-spec.md)가 정의한다
@@ -259,16 +275,21 @@ stateDiagram-v2
   - 해제 대상 자신은 전이 조건에서 제외하므로, 다른 정지가 없으면 즉시 `ACTIVE`가 된다
   - 해제 당일은 정지 구간에 남으므로(C-23) 상태가 `ACTIVE`여도 그날 출입은 거부된다
   - 출입 판정은 상태가 아니라 유효 정지 구간으로 하기 때문이다
+- `deduct()`의 현재 상태에 `PAUSED`가 있는 이유
+  - 출입 판정은 저장 상태가 아니라 날짜 · 유효 정지 구간으로 한다 (H-10)
+  - 저장 상태가 `PAUSED`여도 오늘이 정지 구간 밖이면 출입 · 차감이 일어난다 (예: 배치 전 · 조기 해제 다음 날)
 - 날짜 경과 전이는 매일 00:00(KST) 상태 동기화 배치가 처리한다 (D-21 · FR-5.6)
-  - 실행 순서: 만료 → 정지 종료 → 정지 시작 (§5 · §7)
+  - 실행 순서: 기간 만료 → 잔여 소진 만료 → 정지 종료 → 정지 시작 (§5 · §7)
   - 각 단계는 현재 상태를 WHERE에 넣은 bulk UPDATE라 다시 실행해도 결과가 같다
   - 배치 전이는 변경 이력을 남기지 않는다 — FR-5.5 이벤트(등록 · 정지 · 해제 · 차감 · 취소)가 아니다
 - 배치가 실패한 날의 안전망 — 저장 상태가 하루 어긋나도 규칙은 깨지지 않는다
   - 목록 조회: 종료일 기준 날짜 보정 (D-21, §6 · [04 API-6](04-api-spec.md))
-  - 출입 판정(FR-3.2): 상태가 아니라 날짜 · 유효 정지 구간 · 잔여를 직접 검사 (H-10)
+  - 출입 판정(FR-3.2): 상태가 아니라 날짜 · 유효 정지 구간 · 잔여 · 오늘 차감 여부를 직접 검사 (H-10 · D-27)
   - 정지 · 취소: 종료일 < 오늘이면 만료로 보고 거부 (H-11)
   - 등록: 종료일 조건으로 stale 회원권을 세지 않음
-- 차감으로 잔여 0 도달 시 `EXPIRED` 전이는 D-7("만료를 단일 축으로") · H-11("소진 회원권 이벤트 거부")의 구체화다
+- 횟수제 잔여 소진의 `EXPIRED` 전이는 차감이 아니라 00:00 상태 동기화 배치가 한다 (D-27)
+  - 소진 당일은 상태가 유지되고 재출입이 허용된다
+  - 다음 날부터는 배치 전이어도 출입 판정이 잔여 0을 거부한다
 
 `NotificationStatus` (표만, 단순 전이)
 
@@ -287,9 +308,9 @@ stateDiagram-v2
 | 이름 | 위치 | 하는 일 | 관련 FR |
 |---|---|---|---|
 | `MembershipRegistrationService` | `membership` | member 행 락 → 종료일 ≥ 오늘인 `ACTIVE` · `PAUSED` 존재 검사 → 등록 (애그리거트 2개 경유) | FR-2.3 · NFR-3 |
-| `AttendanceService` | `attendance` | member 행 락 → membership 행 락 → 유효 검사 → 오늘 첫 출입이면 차감 → 기록 (한 트랜잭션, D-26) | FR-3.1~3.4 · NFR-2 · NFR-4 |
+| `AttendanceService` | `attendance` | member 행 락 → membership 행 락 → 지점 검사 → 오늘 차감 여부 조회 → 유효 검사 → 오늘 첫 차감이면 차감 → 기록 (한 트랜잭션, D-26 · D-27) | FR-3.1~3.4 · NFR-2 · NFR-4 |
 | `NotificationBatch` | `notification` | 09:00 대상 선정(신규 + 실패 재시도) → 발송 → 이력 기록 | FR-6.1~6.4 |
-| `MembershipStatusSyncBatch` | `membership` | 00:00 조건부 bulk UPDATE 3단계 (만료 → 정지 종료 → 정지 시작) | FR-5.6 |
+| `MembershipStatusSyncBatch` | `membership` | 00:00 조건부 bulk UPDATE 4단계 (기간 만료 → 잔여 소진 만료 → 정지 종료 → 정지 시작) | FR-5.6 |
 | `MembershipType`별 정책 | `membership` | 종료일 계산(D-6 · D-7) · 차감 대상 여부 분기 (다형성 지점) | FR-2.4 |
 
 - 횟수제 유효기간 6개월은 `MembershipType`의 enum 상수다 (D-7 보충, C-32)
@@ -297,16 +318,18 @@ stateDiagram-v2
   - 종류의 정의이고, `months` 컬럼(D-24)에 저장되므로 값이 바뀌어도 기존 회원권에 영향이 없다
 - 입력 상한 120 · 1000은 예외가 아니라 설정값이다 (`application.yml` 정책 값, C-34 → D-23)
 
-**`MembershipStatusSyncBatch` 단계** (D-21, 매일 00:00 KST)
+**`MembershipStatusSyncBatch` 단계** (D-21 · D-27, 매일 00:00 KST)
 
 | 순서 | 전이 | 대상 조건 | 사용 인덱스 |
 |---|---|---|---|
 | 1 | `ACTIVE` · `PAUSED` → `EXPIRED` | `status IN ('ACTIVE','PAUSED') AND end_date < :today` | `membership (status, end_date)` 범위 스캔 |
-| 2 | `PAUSED` → `ACTIVE` | `status = 'PAUSED'` + 어제로 끝난 정지 있음 + 오늘을 포함하는 정지 없음 | `membership (status, end_date)` 선행 등호 |
-| 3 | `ACTIVE` → `PAUSED` | `status = 'ACTIVE'` + `start_date = :today`인 미해제 정지 있음 | `membership_pause (start_date)` |
+| 2 | `ACTIVE` · `PAUSED` → `EXPIRED` | `status IN ('ACTIVE','PAUSED') AND type = 'COUNT' AND remaining_count = 0` (D-27) | `membership (status, end_date)` 선행 컬럼 + 잔여 조건 필터 |
+| 3 | `PAUSED` → `ACTIVE` | `status = 'PAUSED'` + 어제로 끝난 정지 있음 + 오늘을 포함하는 정지 없음 | `membership (status, end_date)` 선행 등호 |
+| 4 | `ACTIVE` → `PAUSED` | `status = 'ACTIVE'` + `start_date = :today`인 미해제 정지 있음 | `membership_pause (start_date)` |
 
-- 모든 단계의 WHERE에 현재 상태가 들어 있어, 전이된 행은 다음 실행에서 다시 잡히지 않는다 (멱등, TC-5-09)
-- 1단계를 먼저 돌려 만료된 회원권을 2 · 3단계 대상에서 뺀다
+- 모든 단계의 WHERE에 현재 상태가 들어 있어, 전이된 행은 다음 실행에서 다시 잡히지 않는다 (멱등, TC-5-09 · TC-5-10)
+- 1 · 2단계를 먼저 돌려 만료된 회원권을 3 · 4단계 대상에서 뺀다
+- 2단계는 잔여 전용 인덱스가 없다 — 한계는 D-27
 - JPQL bulk UPDATE는 엔티티를 거치지 않으므로 `MembershipHistory`가 생기지 않는다 (§4)
 
 ---
@@ -442,16 +465,17 @@ erDiagram
 
 | 지점 | 경합 시나리오 | 제어 방식 | 트랜잭션 경계 | 검증 |
 |---|---|---|---|---|
-| 출입 차감 (KST 하루 1회, D-5) | 같은 회원 출입 요청 N건 동시 (S-37) | member 행 PK `FOR UPDATE` → 후보 membership 조회 → membership 행 PK `FOR UPDATE` → `attendance_record`에서 오늘(`entry_date`) `deducted=true` 존재 검사 → 첫 출입만 차감 (D-26) | 출입 API 1건 = 1트랜잭션 (기록 + 차감 원자, NFR-4) | TC-3-07 (NFR-2) |
+| 출입 차감 (KST 하루 1회, D-5) | 같은 회원 출입 요청 N건 동시 (S-37) | member 행 PK `FOR UPDATE` → 후보 membership 조회 → membership 행 PK `FOR UPDATE` → `attendance_record`에서 오늘(`entry_date`) `deducted=true` 존재 검사 → 유효 판정 → 첫 차감만 수행 (D-26 · D-27) | 출입 API 1건 = 1트랜잭션 (기록 + 차감 원자, NFR-4) | TC-3-07 (NFR-2) |
 | 회원권 등록 | 같은 회원에 등록 요청 2건 동시 | member 행 비관적 락(PK `FOR UPDATE`)으로 직렬화 → 종료일 ≥ 오늘인 `ACTIVE` · `PAUSED` 존재 검사 → 삽입 | 등록 API 1건 = 1트랜잭션 | TC-2-06 (NFR-3) |
 | 안내 발송 | 배치 재실행 · 중복 실행 | `notification_record` UNIQUE `(membership_id, type, base_date)` — 삽입 충돌 시 해당 건 스킵 | 발송 1건 = 이력 1건 커밋 (건별 트랜잭션) | TC-6-04 (NFR-7) |
-| 상태 동기화 (00:00, D-21) | 배치 재실행 · 같은 회원권의 정지 · 해제 · 출입과 동시 | 현재 상태를 WHERE에 넣은 조건부 bulk UPDATE — InnoDB가 조건에 맞는 행만 쓰기 잠금 | 단계 1개 = UPDATE 1문 = 1트랜잭션 (§5 순서) | TC-5-06 · TC-5-07 · TC-5-09 |
+| 상태 동기화 (00:00, D-21) | 배치 재실행 · 같은 회원권의 정지 · 해제 · 출입과 동시 | 현재 상태를 WHERE에 넣은 조건부 bulk UPDATE — InnoDB가 조건에 맞는 행만 쓰기 잠금 | 단계 1개 = UPDATE 1문 = 1트랜잭션 (§5 순서) | TC-5-06 · TC-5-07 · TC-5-09 · TC-5-10 |
 
 **선택 근거**
 - "유효 회원권 1개"는 상태 · 날짜 조건부 제약이라 MySQL UNIQUE로 표현할 수 없다
   - 부모(member) 행 락으로 검사-삽입 구간을 직렬화한다 — 이것이 02의 "DB 수준 방어"다
   - 락 조회를 트랜잭션의 첫 쿼리로 둔다. REPEATABLE READ 스냅샷이 첫 일반 조회 시점에 잡히므로, 락 앞에 일반 SELECT가 있으면 먼저 커밋된 등록을 못 본다.
 - 차감 판정도 조건부(오늘 첫 출입)라 조건부 UPDATE보다 락 + 검사가 단순하다
+  - 잔여 1회에서 N건이 동시에 와도 첫 건만 차감하고, 나머지는 "오늘 차감됨"으로 허용된다 (D-27, TC-3-07)
   - 락 순서와 범위는 D-26 — member 행 → membership 행, 각 PK 1행
 - 출입 판정 대상 회원권은 항상 1건 이하다
   - 조회 조건 = `member_id = ? AND status IN ('ACTIVE','PAUSED') AND end_date >= :today`
@@ -483,15 +507,17 @@ sequenceDiagram
 
     C->>Ctrl: POST 출입 (X-Branch-Id)
     Ctrl->>App: command(memberId, branchId)
-    App->>Repo: 유효 회원권 조회 (FOR UPDATE)
-    App->>M: validateEntry(today) — 날짜·정지·잔여 직접 검사
-    App->>Repo: 오늘 deducted=true 출입 존재?
-    alt 오늘 첫 출입
-        App->>M: deduct(today) + DEDUCTED 이력
+    App->>Repo: member 행 락 (FOR UPDATE, 없으면 MEMBER_NOT_FOUND)
+    App->>Repo: 판정 대상 회원권 조회 후 행 락 (FOR UPDATE)
+    App->>M: verifyBranch(branchId) — 타 지점이면 BRANCH_FORBIDDEN
+    App->>Repo: 오늘 deducted=true 출입 존재? (deductedToday)
+    App->>M: validateEntry(today, deductedToday) — 날짜·정지·잔여 직접 검사
+    alt 오늘 첫 차감
+        App->>M: deduct(today) + DEDUCTED 이력 (잔여 0이어도 상태 유지)
     end
     App->>Repo: AttendanceRecord 저장 (deducted 여부 포함)
     App-->>Ctrl: info
-    Ctrl-->>C: 200 (두 번째 이후도 동일 응답, D-11)
+    Ctrl-->>C: 200 (두 번째 이후 · 소진 당일 재출입도 동일 응답, D-11 · D-27)
 ```
 
 ---
