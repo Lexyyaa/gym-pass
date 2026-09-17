@@ -6,7 +6,7 @@
 > - API: [04](design/04-api-spec.md)
 >
 
-**현재:** F3 / T3-7
+**현재:** F4 / T4-1
 
 ## 규칙
 
@@ -35,7 +35,7 @@
 | F0 설계 문서 · 점검 | +1:00 | +1:25 (14:28) |
 | F1 기초 설정 | +1:15 | +1:39 (14:42) |
 | F2 회원·회원권 등록 | +1:35 | 19:02 (+5:59, 사용량 한도로 15:03~18:21 중단 — 중단 제외 약 +2:41) |
-| F3 출입 | +2:00 | |
+| F3 출입 | +2:00 | 19:34 (시작 19:09, 소요 약 0:25) |
 | F4 정지와 연장 | +2:20 | |
 | F5 조회 | +2:35 | |
 | F6 만료 안내 | +2:45 | |
@@ -94,7 +94,7 @@
 - [x] T3-4 `test: 출입 경계 엣지 케이스` — TC-3-03 · TC-3-05 · TC-3-06 · TC-3-10
 - [x] T3-5 `test: 동시 출입 하루 1회 차감` — TC-3-07 · NFR-2 · NFR-4
 - [x] T3-6 `test: F3 .http 실행 케이스`
-- [ ] T3-7 `docs: F3 작업 로그`
+- [x] T3-7 `docs: F3 작업 로그`
 
 ## F4. 정지와 연장 `feature/pause` — FR-4.1 ~ FR-4.4
 
@@ -174,6 +174,18 @@
 | F2 | verifier | 낮음 | 테스트 | "서비스가 설정값을 도메인에 넘긴다" 연결을 검증하는 테스트가 없다 | |
 | F2 | verifier | 낮음 | 문서 | 02 TC-2-07 행에 에러 코드 표기가 없다 (API는 `COMMON_`, 도메인은 `MEMBERSHIP_`) | |
 | F2 | reviewer | 낮음 | 코드 | 저장 직후 `MembershipHistory.membershipId`가 메모리에서 null (`insertable = false`) — F4 이후 응답에 쓸 때 주의 | |
+| F3 | verifier | 중간 | 테스트 | NFR-4(기록 · 차감 원자성)의 롤백 케이스가 없다 — 차감 뒤 기록 저장 실패 시 잔여가 되돌아가는지 미검증 | |
+| F3 | verifier | 낮음 | 테스트 | TC-3-09 · TC-3-10 테스트에 ID가 없다 (task_list는 [x]) · TC-3-09의 "기록 0건" 단언이 항상 참 (`Long.MAX_VALUE`로 필터) | |
+| F3 | reviewer | 낮음 | 테스트 | TC ID 없는 테스트 다수 (헤더 누락 · memberId null · 오늘/어제 차감 · 기간제 차감 noop · verifyBranch · 스키마) — 02 TC 표 추가 후보 | |
+| F3 | reviewer | 낮음 | 테스트 | `deductedToday = true`로 상태 검사를 우회하지 않는지 EXPIRED · CANCELED 케이스가 없다 (기간 밖만 검증) | |
+| F3 | verifier | 낮음 | 테스트 | TC-3-06 "다음 날 거부"가 연속 시나리오가 아니라 전날 기록을 직접 INSERT해 흉내 낸다 | |
+| F3 | verifier | 낮음 | 테스트 | "출입 후보 항상 1건 이하" 전제를 깨는 데이터에서 `Optional` 조회가 500이 되는지 검증 없음 (API로는 도달 불가) | |
+| F3 | verifier | 낮음 | 테스트 | 출입 테스트가 시스템 시계 기준이라 자정 전후 실행 시 흔들릴 수 있다 | |
+| F3 | reviewer | 낮음 | 코드 | `AttendanceService.java:41` · `Membership.java:126` 주석 근거가 부정확 — 정합성 근거는 membership 락이 아니라 member 락 뒤 스냅샷 | |
+| F3 | verifier | 낮음 | 문서 | 03 §3.3 `deduct` 실패 조건에 "기간 밖"이 없다 (코드는 `validateEntry(today, false)`로 거부) | |
+| F3 | verifier | 낮음 | 문서 | 03 §7 · §8 흐름에 "membership 락 뒤 후보 조건 재검증(409)" 단계가 없다 | |
+| F3 | verifier | 낮음 | 문서 | 03 §3.4에 출입 시각 초 단위 절삭이 적혀 있지 않다 | |
+| F3 | verifier | 낮음 | 문서 | 04 API-3 Errors 표의 403 조건 "유효 회원권이 타 지점 소속" ↔ 판정 순서 "판정 대상이 타 지점" 표현이 다르다 | |
 
 ---
 
