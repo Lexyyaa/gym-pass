@@ -24,6 +24,10 @@ public interface MembershipJpaRepository extends JpaRepository<Membership, Long>
             @Param("statuses") Collection<MembershipStatus> statuses,
             @Param("today") LocalDate today);
 
+    /** 회원 id만 스칼라로 읽는다. 엔티티를 적재하지 않는다. */
+    @Query("select m.memberId from Membership m where m.id = :id")
+    Optional<Long> findMemberIdById(@Param("id") Long id);
+
     /** PK 등호라 잠금 범위는 1행이다 (D-26). */
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select m from Membership m where m.id = :id")

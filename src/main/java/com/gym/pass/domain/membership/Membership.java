@@ -86,6 +86,11 @@ public class Membership extends BaseTimeEntity {
     @OrderBy("id ASC")
     private List<MembershipHistory> histories = new ArrayList<>();
 
+    @OneToMany(cascade = CascadeType.PERSIST, fetch = FetchType.LAZY)
+    @JoinColumn(name = "membership_id", nullable = false, updatable = false)
+    @OrderBy("id ASC")
+    private List<MembershipPause> pauses = new ArrayList<>();
+
     private Membership(MembershipRegistration registration) {
         MembershipType membershipType = registration.type();
         this.memberId = registration.memberId();
@@ -121,13 +126,19 @@ public class Membership extends BaseTimeEntity {
     }
 
     /**
-     * 출입 가능 판정 (FR-3.2 · H-10 · D-27). 저장 상태가 아니라 날짜 · 잔여 · 오늘 차감 여부로 직접 검사한다.
+     * 출입 가능 판정 (FR-3.2 · FR-4.4 · H-10 · D-27). 저장 상태가 아니라 날짜 · 유효 정지 구간 · 잔여 · 오늘 차감 여부로 직접 검사한다.
+     * 오늘이 유효 정지 구간 안이면(조기 해제 당일 포함, D-8) ATTENDANCE_MEMBERSHIP_PAUSED다.
      * 횟수제는 잔여 ≥ 1 또는 오늘(KST) 이미 차감된 출입이 있으면 허용한다.
      * deductedToday는 오늘 deducted=true 출입 기록이 있는지이며, membership 행 락을 잡은 뒤에 조회한 값이어야 한다.
-     * 정지 구간 검사(FR-4.4 · ATTENDANCE_MEMBERSHIP_PAUSED)는 MembershipPause와 함께 F4에서 여기에 더한다.
      */
     public void validateEntry(LocalDate today, boolean deductedToday) {
-        if (!isWithinPeriodOn(today) || !hasEntryCountFor(deductedToday)) {
+        if (!isWithinPeriodOn(today)) {
+            throw new AttendanceException(ErrorCode.ATTENDANCE_NO_VALID_MEMBERSHIP);
+        }
+        if (isPausedOn(today)) {
+            throw new AttendanceException(ErrorCode.ATTENDANCE_MEMBERSHIP_PAUSED);
+        }
+        if (!hasEntryCountFor(deductedToday)) {
             throw new AttendanceException(ErrorCode.ATTENDANCE_NO_VALID_MEMBERSHIP);
         }
     }
@@ -146,6 +157,87 @@ public class Membership extends BaseTimeEntity {
         remainingCount = before - 1;
         histories.add(MembershipHistory.deducted(this, before));
         return true;
+    }
+
+    /**
+     * 정지 등록 (FR-4.1 ~ FR-4.3 · D-2 · D-8 · D-19 · D-28). 등록한 정지를 돌려준다.
+     * 예정 일수만큼 종료일을 즉시 늘리고 PAUSED 이력을 남긴다. 시작일이 오늘이면 PAUSED로 전이한다 (03 §4).
+     * 상한은 설정값이다. 검사 순서: 입력 → 소급 → 정지 가능 상태 → 횟수 → 누적 일수 → 겹침 → 날짜 범위.
+     */
+    public MembershipPause pause(
+            LocalDate pauseStartDate, Integer days, LocalDate today, MembershipPauseLimits limits) {
+        if (pauseStartDate == null || days == null || days < 1) {
+            throw new MembershipException(ErrorCode.MEMBERSHIP_INVALID_INPUT, "정지 시작일과 1일 이상의 정지 일수는 필수입니다.");
+        }
+        if (pauseStartDate.isBefore(today)) {
+            throw new MembershipException(ErrorCode.PAUSE_START_DATE_PAST);
+        }
+        if (!isPausableOn(today)) {
+            throw new MembershipException(ErrorCode.MEMBERSHIP_NOT_PAUSABLE);
+        }
+        long pauseCount =
+                pauses.stream().filter(MembershipPause::countsTowardLimit).count();
+        if (pauseCount >= limits.maxCount()) {
+            throw new MembershipException(ErrorCode.PAUSE_COUNT_LIMIT_EXCEEDED);
+        }
+        long totalDays = pauses.stream().mapToLong(MembershipPause::countedDays).sum() + days;
+        if (totalDays > limits.maxTotalDays(months)) {
+            throw new MembershipException(ErrorCode.PAUSE_DAYS_LIMIT_EXCEEDED);
+        }
+        LocalDate pauseEndDate = pauseStartDate.plusDays(days - 1L);
+        if (pauses.stream().anyMatch(pause -> pause.overlaps(pauseStartDate, pauseEndDate))) {
+            throw new MembershipException(ErrorCode.PAUSE_OVERLAPPED);
+        }
+        LocalDate extendedEndDate = endDate.plusDays(days);
+        if (pauseEndDate.isAfter(MAX_DATE) || extendedEndDate.isAfter(MAX_DATE)) {
+            throw new MembershipException(ErrorCode.MEMBERSHIP_INVALID_INPUT, "정지 후 날짜가 " + MAX_DATE + "를 넘습니다.");
+        }
+
+        MembershipPause pause = MembershipPause.schedule(pauseStartDate, days);
+        pauses.add(pause);
+        LocalDate before = endDate;
+        endDate = extendedEndDate;
+        if (pauseStartDate.isEqual(today)) {
+            status = MembershipStatus.PAUSED;
+        }
+        histories.add(MembershipHistory.endDateChanged(this, MembershipEventType.PAUSED, before));
+        return pause;
+    }
+
+    /**
+     * 정지 조기 해제 (FR-4.2 · D-8 · C-24 · C-25). 해제한 정지를 돌려준다.
+     * 해제 당일까지 정지로 치고, 미사용 일수만큼 종료일을 되돌린 뒤 RESUMED 이력을 남긴다.
+     * PAUSED 상태는 해제 대상을 뺀 다른 정지가 오늘을 포함하지 않으면 ACTIVE로 바꾼다 (03 §4).
+     */
+    public MembershipPause releasePause(Long pauseId, LocalDate today) {
+        MembershipPause target = pauses.stream()
+                .filter(pause -> pause.getId().equals(pauseId))
+                .findFirst()
+                .orElseThrow(() -> new MembershipException(ErrorCode.PAUSE_NOT_FOUND));
+        if (!target.isReleasableOn(today)) {
+            throw new MembershipException(ErrorCode.PAUSE_NOT_RELEASABLE);
+        }
+
+        int unusedDays = target.release(today);
+        LocalDate before = endDate;
+        endDate = endDate.minusDays(unusedDays);
+        boolean otherPauseToday =
+                pauses.stream().filter(pause -> pause != target).anyMatch(pause -> pause.covers(today));
+        if (status == MembershipStatus.PAUSED && !otherPauseToday) {
+            status = MembershipStatus.ACTIVE;
+        }
+        histories.add(MembershipHistory.endDateChanged(this, MembershipEventType.RESUMED, before));
+        return target;
+    }
+
+    private boolean isPausedOn(LocalDate today) {
+        return pauses.stream().anyMatch(pause -> pause.covers(today));
+    }
+
+    /** 만료 판정 = EXPIRED · CANCELED · 종료일 < 오늘 · 횟수제 잔여 0 (H-11 · D-21 · D-28). */
+    private boolean isPausableOn(LocalDate today) {
+        boolean exhausted = type.deductible() && (remainingCount == null || remainingCount < 1);
+        return status.isUsable() && !today.isAfter(endDate) && !exhausted;
     }
 
     private boolean isWithinPeriodOn(LocalDate today) {
