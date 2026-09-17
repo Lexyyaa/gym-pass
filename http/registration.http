@@ -1,0 +1,276 @@
+@host = http://localhost:8080
+
+# F2 회원·회원권 등록 — API-1 · API-2
+# seed(03 §9): 지점 1·2 / 회원 1(지점 1 기간제 ACTIVE) · 2(횟수제 ACTIVE) · 3(EXPIRED만) · 4(지점 2 ACTIVE)
+# 시작일은 실행일(2026-09-17) 기준으로 고정한다
+# 도달하지 않는 에러
+# - MEMBER_INVALID_INPUT: 공백 이름 · 형식 오류 연락처는 Request 검증(COMMON_INVALID_INPUT)이 먼저 막는다 — 도메인 테스트 TC-2-12로 확인
+# - MEMBER_PHONE_DUPLICATED: F7(선택) 구현 시에만
+# - PAUSED 보유 회원 재등록(TC-2-09): 정지 API가 F4라 여기서 만들 수 없다 — API 테스트로 확인
+
+### [TC-2-01] 이름 · 연락처로 회원 등록
+# @expect 201
+# @expect $.name == "정하늘"
+# @expect $.phone == "010-9000-0001"
+# @db SELECT COUNT(*) FROM member WHERE phone = '010-9000-0001' => 1
+POST {{host}}/api/members
+Content-Type: application/json
+X-Branch-Id: 1
+
+{ "name": "정하늘", "phone": "010-9000-0001" }
+
+### [TC-2-02] 기간제 회원권 등록 (3개월)
+# @uses memberId = [TC-2-01].$.memberId
+# @expect 201
+# @expect $.type == "PERIOD"
+# @expect $.status == "ACTIVE"
+# @expect $.branchId == 1
+# @expect $.endDate == "2026-12-17"
+# @expect $.remainingCount == null
+# @db SELECT COUNT(*) FROM membership WHERE member_id = {{memberId}} AND status = 'ACTIVE' AND months = 3 => 1
+# @db SELECT COUNT(*) FROM membership_history WHERE member_id = {{memberId}} AND event_type = 'REGISTERED' => 1
+POST {{host}}/api/memberships
+Content-Type: application/json
+X-Branch-Id: 1
+
+{ "memberId": {{memberId}}, "type": "PERIOD", "startDate": "2026-09-17", "months": 3, "paymentAmount": 300000 }
+
+### [TC-2-13] 기간제인데 months 없음 → 400
+# @expect 400
+# @expect $.errorCode == "MEMBERSHIP_INVALID_INPUT"
+# @db SELECT COUNT(*) FROM membership WHERE member_id = 3 => 1
+POST {{host}}/api/memberships
+Content-Type: application/json
+X-Branch-Id: 1
+
+{ "memberId": 3, "type": "PERIOD", "startDate": "2026-09-17", "paymentAmount": 300000 }
+
+### [TC-2-04] 횟수제 회원권 등록 — EXPIRED만 가진 회원 3, 종료일 = 시작일 + 6개월
+# @expect 201
+# @expect $.type == "COUNT"
+# @expect $.status == "ACTIVE"
+# @expect $.endDate == "2027-03-17"
+# @expect $.remainingCount == 10
+# @db SELECT COUNT(*) FROM membership WHERE member_id = 3 AND status = 'ACTIVE' AND remaining_count = 10 AND months = 6 => 1
+POST {{host}}/api/memberships
+Content-Type: application/json
+X-Branch-Id: 1
+
+{ "memberId": 3, "type": "COUNT", "startDate": "2026-09-17", "count": 10, "paymentAmount": 150000 }
+
+### [TC-2-05] 유효 회원권 보유 회원(seed 회원 1)에 재등록 → 409
+# @expect 409
+# @expect $.errorCode == "MEMBERSHIP_ALREADY_ACTIVE"
+# @db SELECT COUNT(*) FROM membership WHERE member_id = 1 => 1
+POST {{host}}/api/memberships
+Content-Type: application/json
+X-Branch-Id: 1
+
+{ "memberId": 1, "type": "PERIOD", "startDate": "2026-09-17", "months": 1, "paymentAmount": 100000 }
+
+### [TC-2-18] 다른 지점(2)의 유효 회원권을 가진 회원 4에 지점 1에서 등록 → 409
+# @expect 409
+# @expect $.errorCode == "MEMBERSHIP_ALREADY_ACTIVE"
+# @db SELECT COUNT(*) FROM membership WHERE member_id = 4 => 1
+POST {{host}}/api/memberships
+Content-Type: application/json
+X-Branch-Id: 1
+
+{ "memberId": 4, "type": "PERIOD", "startDate": "2026-09-17", "months": 1, "paymentAmount": 100000 }
+
+### [TC-2-07] 0개월 → 400 (Request 검증)
+# @expect 400
+# @expect $.errorCode == "COMMON_INVALID_INPUT"
+# @db SELECT COUNT(*) FROM membership WHERE member_id = 1 => 1
+POST {{host}}/api/memberships
+Content-Type: application/json
+X-Branch-Id: 1
+
+{ "memberId": 1, "type": "PERIOD", "startDate": "2026-09-17", "months": 0, "paymentAmount": 100000 }
+
+### [TC-2-07-금액] 음수 금액 → 400 (Request 검증)
+# @expect 400
+# @expect $.errorCode == "COMMON_INVALID_INPUT"
+POST {{host}}/api/memberships
+Content-Type: application/json
+X-Branch-Id: 1
+
+{ "memberId": 1, "type": "PERIOD", "startDate": "2026-09-17", "months": 1, "paymentAmount": -1 }
+
+### [TC-2-08] 없는 회원 ID로 회원권 등록 → 404
+# @expect 404
+# @expect $.errorCode == "MEMBER_NOT_FOUND"
+# @db SELECT COUNT(*) FROM membership WHERE member_id = 999999 => 0
+POST {{host}}/api/memberships
+Content-Type: application/json
+X-Branch-Id: 1
+
+{ "memberId": 999999, "type": "PERIOD", "startDate": "2026-09-17", "months": 1, "paymentAmount": 100000 }
+
+### [TC-2-11-준비] 미래 시작 회원권 검증용 회원 등록
+# @expect 201
+# @db SELECT COUNT(*) FROM member WHERE phone = '010-9000-0002' => 1
+POST {{host}}/api/members
+Content-Type: application/json
+X-Branch-Id: 1
+
+{ "name": "한도윤", "phone": "010-9000-0002" }
+
+### [TC-2-11-준비2] 시작일이 미래(2026-12-01)인 회원권 등록
+# @uses futureMemberId = [TC-2-11-준비].$.memberId
+# @expect 201
+# @expect $.startDate == "2026-12-01"
+# @expect $.endDate == "2027-01-01"
+# @db SELECT COUNT(*) FROM membership WHERE member_id = {{futureMemberId}} => 1
+POST {{host}}/api/memberships
+Content-Type: application/json
+X-Branch-Id: 1
+
+{ "memberId": {{futureMemberId}}, "type": "PERIOD", "startDate": "2026-12-01", "months": 1, "paymentAmount": 100000 }
+
+### [TC-2-11] 시작일이 미래인 ACTIVE 회원권 보유 회원에 등록 → 409
+# @uses futureMemberId = [TC-2-11-준비].$.memberId
+# @expect 409
+# @expect $.errorCode == "MEMBERSHIP_ALREADY_ACTIVE"
+# @db SELECT COUNT(*) FROM membership WHERE member_id = {{futureMemberId}} => 1
+POST {{host}}/api/memberships
+Content-Type: application/json
+X-Branch-Id: 1
+
+{ "memberId": {{futureMemberId}}, "type": "PERIOD", "startDate": "2026-09-17", "months": 1, "paymentAmount": 100000 }
+
+### [TC-1-03] X-Branch-Id 헤더 누락 → 400
+# @expect 400
+# @expect $.errorCode == "COMMON_INVALID_INPUT"
+# @db SELECT COUNT(*) FROM member WHERE phone = '010-9000-0003' => 0
+POST {{host}}/api/members
+Content-Type: application/json
+
+{ "name": "헤더없음", "phone": "010-9000-0003" }
+
+### [TC-1-03-형식] X-Branch-Id 숫자 아님 → 400
+# @expect 400
+# @expect $.errorCode == "COMMON_INVALID_INPUT"
+POST {{host}}/api/memberships
+Content-Type: application/json
+X-Branch-Id: abc
+
+{ "memberId": 3, "type": "PERIOD", "startDate": "2026-09-17", "months": 1, "paymentAmount": 100000 }
+
+### [TC-1-04] 없는 지점 ID → 404
+# @expect 404
+# @expect $.errorCode == "BRANCH_NOT_FOUND"
+# @db SELECT COUNT(*) FROM member WHERE phone = '010-9000-0004' => 0
+POST {{host}}/api/members
+Content-Type: application/json
+X-Branch-Id: 999
+
+{ "name": "지점없음", "phone": "010-9000-0004" }
+
+### [TC-2-01-실패] 형식 오류 연락처 → 400 (Request 검증)
+# @expect 400
+# @expect $.errorCode == "COMMON_INVALID_INPUT"
+# @db SELECT COUNT(*) FROM member WHERE phone = '01090000005' => 0
+POST {{host}}/api/members
+Content-Type: application/json
+X-Branch-Id: 1
+
+{ "name": "형식오류", "phone": "01090000005" }
+
+### [TC-2-14-준비] 입력 규칙 검증용 회원 등록 (회원권 없음)
+# @expect 201
+# @db SELECT COUNT(*) FROM member WHERE phone = '010-9000-0006' => 1
+POST {{host}}/api/members
+Content-Type: application/json
+X-Branch-Id: 1
+
+{ "name": "윤서아", "phone": "010-9000-0006" }
+
+### [TC-2-14] 개월 121 → 400
+# @uses cleanMemberId = [TC-2-14-준비].$.memberId
+# @expect 400
+# @expect $.errorCode == "MEMBERSHIP_INVALID_INPUT"
+# @db SELECT COUNT(*) FROM membership WHERE member_id = {{cleanMemberId}} => 0
+POST {{host}}/api/memberships
+Content-Type: application/json
+X-Branch-Id: 1
+
+{ "memberId": {{cleanMemberId}}, "type": "PERIOD", "startDate": "2026-09-17", "months": 121, "paymentAmount": 100000 }
+
+### [TC-2-14-횟수] 횟수 1001 → 400
+# @uses cleanMemberId = [TC-2-14-준비].$.memberId
+# @expect 400
+# @expect $.errorCode == "MEMBERSHIP_INVALID_INPUT"
+# @db SELECT COUNT(*) FROM membership WHERE member_id = {{cleanMemberId}} => 0
+POST {{host}}/api/memberships
+Content-Type: application/json
+X-Branch-Id: 1
+
+{ "memberId": {{cleanMemberId}}, "type": "COUNT", "startDate": "2026-09-17", "count": 1001, "paymentAmount": 100000 }
+
+### [TC-2-15] 시작일 9999-12-31 + 1개월 → 400
+# @uses cleanMemberId = [TC-2-14-준비].$.memberId
+# @expect 400
+# @expect $.errorCode == "MEMBERSHIP_INVALID_INPUT"
+# @db SELECT COUNT(*) FROM membership WHERE member_id = {{cleanMemberId}} => 0
+POST {{host}}/api/memberships
+Content-Type: application/json
+X-Branch-Id: 1
+
+{ "memberId": {{cleanMemberId}}, "type": "PERIOD", "startDate": "9999-12-31", "months": 1, "paymentAmount": 100000 }
+
+### [TC-2-16] 기간제에 count → 400
+# @uses cleanMemberId = [TC-2-14-준비].$.memberId
+# @expect 400
+# @expect $.errorCode == "MEMBERSHIP_INVALID_INPUT"
+# @db SELECT COUNT(*) FROM membership WHERE member_id = {{cleanMemberId}} => 0
+POST {{host}}/api/memberships
+Content-Type: application/json
+X-Branch-Id: 1
+
+{ "memberId": {{cleanMemberId}}, "type": "PERIOD", "startDate": "2026-09-17", "months": 1, "count": 5, "paymentAmount": 100000 }
+
+### [TC-2-16-횟수] 횟수제에 months → 400
+# @uses cleanMemberId = [TC-2-14-준비].$.memberId
+# @expect 400
+# @expect $.errorCode == "MEMBERSHIP_INVALID_INPUT"
+# @db SELECT COUNT(*) FROM membership WHERE member_id = {{cleanMemberId}} => 0
+POST {{host}}/api/memberships
+Content-Type: application/json
+X-Branch-Id: 1
+
+{ "memberId": {{cleanMemberId}}, "type": "COUNT", "startDate": "2026-09-17", "count": 10, "months": 3, "paymentAmount": 100000 }
+
+### [TC-2-17] 시작일 0999-12-31 (하한 1000-01-01 미만) → 400
+# @uses cleanMemberId = [TC-2-14-준비].$.memberId
+# @expect 400
+# @expect $.errorCode == "MEMBERSHIP_INVALID_INPUT"
+# @db SELECT COUNT(*) FROM membership WHERE member_id = {{cleanMemberId}} => 0
+POST {{host}}/api/memberships
+Content-Type: application/json
+X-Branch-Id: 1
+
+{ "memberId": {{cleanMemberId}}, "type": "PERIOD", "startDate": "0999-12-31", "months": 1, "paymentAmount": 100000 }
+
+### [TC-2-17-음수연도] 시작일 -0001-01-01 → 400 (DB에 다른 날짜로 저장되던 경로)
+# @uses cleanMemberId = [TC-2-14-준비].$.memberId
+# @expect 400
+# @expect $.errorCode == "MEMBERSHIP_INVALID_INPUT"
+# @db SELECT COUNT(*) FROM membership WHERE member_id = {{cleanMemberId}} => 0
+POST {{host}}/api/memberships
+Content-Type: application/json
+X-Branch-Id: 1
+
+{ "memberId": {{cleanMemberId}}, "type": "PERIOD", "startDate": "-0001-01-01", "months": 1, "paymentAmount": 100000 }
+
+### [TC-2-17-경계] 시작일 1000-01-01은 등록된다
+# @uses cleanMemberId = [TC-2-14-준비].$.memberId
+# @expect 201
+# @expect $.startDate == "1000-01-01"
+# @expect $.endDate == "1000-02-01"
+# @db SELECT start_date FROM membership WHERE member_id = {{cleanMemberId}} => 1000-01-01
+POST {{host}}/api/memberships
+Content-Type: application/json
+X-Branch-Id: 1
+
+{ "memberId": {{cleanMemberId}}, "type": "PERIOD", "startDate": "1000-01-01", "months": 1, "paymentAmount": 100000 }
