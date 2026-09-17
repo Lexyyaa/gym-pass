@@ -115,6 +115,11 @@ public class Membership extends BaseTimeEntity {
         }
     }
 
+    /** 출입 판정 대상 조건(ACTIVE · PAUSED, 종료일 ≥ today)을 만족하는지 (D-19 · 03 §7 조회 조건과 같다). */
+    public boolean isEntryCandidateOn(LocalDate today) {
+        return status.isUsable() && !today.isAfter(endDate);
+    }
+
     /**
      * 출입 가능 판정 (FR-3.2 · H-10). 저장 상태가 아니라 날짜 · 잔여로 직접 검사한다.
      * 정지 구간 검사(FR-4.4 · ATTENDANCE_MEMBERSHIP_PAUSED)는 MembershipPause와 함께 F4에서 여기에 더한다.

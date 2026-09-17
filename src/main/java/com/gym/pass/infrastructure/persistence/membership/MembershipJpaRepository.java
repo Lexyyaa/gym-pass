@@ -16,12 +16,16 @@ public interface MembershipJpaRepository extends JpaRepository<Membership, Long>
     boolean existsByMemberIdAndStatusInAndEndDateGreaterThanEqual(
             Long memberId, Collection<MembershipStatus> statuses, LocalDate today);
 
-    /** (member_id, status) 인덱스로 찾아 잠근다. 잠금 범위는 이 회원의 ACTIVE · PAUSED 행이다. */
-    @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @Query("select m from Membership m"
+    /** 출입 판정 대상의 id만 일반 조회한다. 엔티티를 영속성 컨텍스트에 올리지 않아야 뒤의 락 조회가 최신 값을 적재한다. */
+    @Query("select m.id from Membership m"
             + " where m.memberId = :memberId and m.status in :statuses and m.endDate >= :today")
-    Optional<Membership> findValidByMemberIdForUpdate(
+    Optional<Long> findValidIdByMemberId(
             @Param("memberId") Long memberId,
             @Param("statuses") Collection<MembershipStatus> statuses,
             @Param("today") LocalDate today);
+
+    /** PK 등호라 잠금 범위는 1행이다 (D-26). */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select m from Membership m where m.id = :id")
+    Optional<Membership> findByIdForUpdate(@Param("id") Long id);
 }
