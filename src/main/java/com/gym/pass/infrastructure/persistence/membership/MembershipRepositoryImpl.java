@@ -5,6 +5,7 @@ import com.gym.pass.domain.membership.MembershipRepository;
 import com.gym.pass.domain.membership.MembershipStatus;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
 
@@ -26,5 +27,10 @@ public class MembershipRepositoryImpl implements MembershipRepository {
     public boolean existsValidByMemberId(Long memberId, LocalDate today) {
         return membershipJpaRepository.existsByMemberIdAndStatusInAndEndDateGreaterThanEqual(
                 memberId, VALID_STATUSES, today);
+    }
+
+    @Override
+    public Optional<Membership> findValidByMemberIdForUpdate(Long memberId, LocalDate today) {
+        return membershipJpaRepository.findValidByMemberIdForUpdate(memberId, VALID_STATUSES, today);
     }
 }

@@ -1,5 +1,7 @@
 package com.gym.pass.domain.membership;
 
+import com.gym.pass.domain.attendance.exception.AttendanceException;
+import com.gym.pass.domain.branch.exception.BranchException;
 import com.gym.pass.domain.common.BaseTimeEntity;
 import com.gym.pass.domain.exception.ErrorCode;
 import com.gym.pass.domain.membership.exception.MembershipException;
@@ -104,6 +106,48 @@ public class Membership extends BaseTimeEntity {
         Membership membership = new Membership(registration);
         membership.histories.add(MembershipHistory.registered(membership));
         return membership;
+    }
+
+    /** 다른 지점의 회원권이면 BRANCH_FORBIDDEN (NFR-1 · TC-3-08). */
+    public void verifyBranch(Long requestBranchId) {
+        if (!branchId.equals(requestBranchId)) {
+            throw new BranchException(ErrorCode.BRANCH_FORBIDDEN);
+        }
+    }
+
+    /**
+     * 출입 가능 판정 (FR-3.2 · H-10). 저장 상태가 아니라 날짜 · 잔여로 직접 검사한다.
+     * 정지 구간 검사(FR-4.4 · ATTENDANCE_MEMBERSHIP_PAUSED)는 MembershipPause와 함께 F4에서 여기에 더한다.
+     */
+    public void validateEntry(LocalDate today) {
+        if (!isUsableOn(today)) {
+            throw new AttendanceException(ErrorCode.ATTENDANCE_NO_VALID_MEMBERSHIP);
+        }
+    }
+
+    /**
+     * 출입 1회분 차감 (FR-3.3 · FR-5.5). 차감이 일어났으면 true.
+     * 차감 대상이 아닌 종류는 아무것도 바꾸지 않는다. 잔여 0에 도달하면 EXPIRED로 전이한다 (03 §4).
+     */
+    public boolean deduct(LocalDate today) {
+        validateEntry(today);
+        if (!type.deductible()) {
+            return false;
+        }
+        int before = remainingCount;
+        remainingCount = before - 1;
+        if (remainingCount == 0) {
+            status = MembershipStatus.EXPIRED;
+        }
+        histories.add(MembershipHistory.deducted(this, before));
+        return true;
+    }
+
+    private boolean isUsableOn(LocalDate today) {
+        return status.isUsable()
+                && !today.isBefore(startDate)
+                && !today.isAfter(endDate)
+                && (!type.deductible() || (remainingCount != null && remainingCount >= 1));
     }
 
     private static void validate(MembershipRegistration registration, MembershipLimits limits) {
