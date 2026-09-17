@@ -23,11 +23,13 @@ public enum ErrorCode {
     BRANCH_FORBIDDEN(HttpStatus.FORBIDDEN, "다른 지점의 데이터에 접근할 수 없습니다."),
 
     // 회원
+    MEMBER_INVALID_INPUT(HttpStatus.BAD_REQUEST, "회원 정보가 올바르지 않습니다."),
     MEMBER_NOT_FOUND(HttpStatus.NOT_FOUND, "회원을 찾을 수 없습니다."),
     MEMBER_PHONE_DUPLICATED(HttpStatus.CONFLICT, "이미 등록된 연락처입니다."),
     MEMBER_HAS_RELATED_DATA(HttpStatus.CONFLICT, "연관 데이터가 있어 삭제할 수 없습니다."),
 
     // 회원권
+    MEMBERSHIP_INVALID_INPUT(HttpStatus.BAD_REQUEST, "회원권 정보가 올바르지 않습니다."),
     MEMBERSHIP_NOT_FOUND(HttpStatus.NOT_FOUND, "회원권을 찾을 수 없습니다."),
     MEMBERSHIP_ALREADY_ACTIVE(HttpStatus.CONFLICT, "이미 유효한 회원권이 있습니다."),
     MEMBERSHIP_NOT_PAUSABLE(HttpStatus.CONFLICT, "정지할 수 없는 회원권입니다."),
