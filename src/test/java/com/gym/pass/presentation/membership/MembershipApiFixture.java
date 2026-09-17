@@ -1,7 +1,8 @@
 package com.gym.pass.presentation.membership;
 
+import java.time.Clock;
 import java.time.LocalDate;
-import java.time.ZoneId;
+import java.time.LocalDateTime;
 import java.util.Map;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.simple.SimpleJdbcInsert;
@@ -9,20 +10,21 @@ import org.springframework.jdbc.core.simple.SimpleJdbcInsert;
 /** 회원권 API 테스트용 데이터. 테스트 전용 지점 · 연락처 접두로 만들고 지운다 (seed에 기대지 않는다). */
 class MembershipApiFixture {
 
-    static final ZoneId KST = ZoneId.of("Asia/Seoul");
-
     private final JdbcTemplate jdbcTemplate;
+    private final Clock clock;
     private final long branchId;
     private final String phonePrefix;
 
-    MembershipApiFixture(JdbcTemplate jdbcTemplate, long branchId, String phonePrefix) {
+    MembershipApiFixture(JdbcTemplate jdbcTemplate, Clock clock, long branchId, String phonePrefix) {
         this.jdbcTemplate = jdbcTemplate;
+        this.clock = clock;
         this.branchId = branchId;
         this.phonePrefix = phonePrefix;
     }
 
-    static LocalDate today() {
-        return LocalDate.now(KST);
+    /** 서버가 쓰는 Clock 빈 기준 오늘. 테스트와 서버의 기준 시계를 하나로 맞춘다. */
+    LocalDate today() {
+        return LocalDate.now(clock);
     }
 
     void createBranch() {
@@ -41,9 +43,9 @@ class MembershipApiFixture {
                         "phone",
                         phonePrefix + String.format("%04d", seq),
                         "created_at",
-                        java.time.LocalDateTime.now(KST),
+                        LocalDateTime.now(clock),
                         "updated_at",
-                        java.time.LocalDateTime.now(KST)))
+                        LocalDateTime.now(clock)))
                 .longValue();
     }
 

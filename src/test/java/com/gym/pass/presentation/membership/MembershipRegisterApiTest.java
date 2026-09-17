@@ -8,6 +8,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gym.pass.support.IntegrationTest;
 import com.gym.pass.support.web.BranchIdArgumentResolver;
+import com.jayway.jsonpath.JsonPath;
+import java.time.Clock;
 import java.time.LocalDate;
 import java.util.HashMap;
 import java.util.Map;
@@ -42,11 +44,14 @@ class MembershipRegisterApiTest {
     @Autowired
     private ObjectMapper objectMapper;
 
+    @Autowired
+    private Clock clock;
+
     private MembershipApiFixture fixture;
 
     @BeforeEach
     void setUp() {
-        fixture = new MembershipApiFixture(jdbcTemplate, BRANCH_ID, "010-9200-");
+        fixture = new MembershipApiFixture(jdbcTemplate, clock, BRANCH_ID, "010-9200-");
         fixture.createBranch();
     }
 
@@ -97,7 +102,8 @@ class MembershipRegisterApiTest {
                 .containsEntry("event_type", "REGISTERED")
                 .containsEntry("end_date_before", null)
                 .containsEntry("end_date_after", java.sql.Date.valueOf("2026-12-17"));
-        assertThat(history.get("membership_id")).isNotNull();
+        Number membershipId = JsonPath.read(result.andReturn().getResponse().getContentAsString(), "$.membershipId");
+        assertThat(((Number) history.get("membership_id")).longValue()).isEqualTo(membershipId.longValue());
     }
 
     @Test
@@ -128,7 +134,7 @@ class MembershipRegisterApiTest {
     void alreadyActive() throws Exception {
         // given
         long memberId = fixture.createMember(3);
-        LocalDate today = MembershipApiFixture.today();
+        LocalDate today = fixture.today();
         register(BRANCH_ID, period(memberId, today, 1)).andExpect(status().isCreated());
 
         // when
@@ -190,7 +196,7 @@ class MembershipRegisterApiTest {
     void pausedExists() throws Exception {
         // given
         long memberId = fixture.createMember(5);
-        LocalDate today = MembershipApiFixture.today();
+        LocalDate today = fixture.today();
         fixture.insertPeriodMembership(memberId, "PAUSED", today.minusDays(10), today.plusDays(20));
 
         // when
@@ -208,7 +214,7 @@ class MembershipRegisterApiTest {
     void futureActiveExists() throws Exception {
         // given
         long memberId = fixture.createMember(6);
-        LocalDate today = MembershipApiFixture.today();
+        LocalDate today = fixture.today();
         register(BRANCH_ID, period(memberId, today.plusMonths(2), 1)).andExpect(status().isCreated());
 
         // when
@@ -218,6 +224,7 @@ class MembershipRegisterApiTest {
         result.andExpect(status().isConflict())
                 .andExpect(jsonPath("$.errorCode").value("MEMBERSHIP_ALREADY_ACTIVE"));
         assertThat(fixture.countMemberships(memberId)).isEqualTo(1);
+        assertThat(fixture.countHistories(memberId)).isEqualTo(1);
     }
 
     static Stream<Arguments> missingTypeValues() {

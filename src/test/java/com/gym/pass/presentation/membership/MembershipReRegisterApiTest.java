@@ -8,6 +8,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gym.pass.support.IntegrationTest;
 import com.gym.pass.support.web.BranchIdArgumentResolver;
+import java.time.Clock;
 import java.time.LocalDate;
 import java.util.Map;
 import org.junit.jupiter.api.AfterEach;
@@ -20,7 +21,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 
-/** API-2 재등록 경계 (FR-2.3 · D-15 · D-21). 기준일은 서버 KST 오늘이다. */
+/** API-2 재등록 경계 (FR-2.3 · D-15 · D-21). 기준일은 서버 Clock 빈의 오늘이다. */
 @IntegrationTest
 class MembershipReRegisterApiTest {
 
@@ -35,11 +36,14 @@ class MembershipReRegisterApiTest {
     @Autowired
     private ObjectMapper objectMapper;
 
+    @Autowired
+    private Clock clock;
+
     private MembershipApiFixture fixture;
 
     @BeforeEach
     void setUp() {
-        fixture = new MembershipApiFixture(jdbcTemplate, BRANCH_ID, "010-9300-");
+        fixture = new MembershipApiFixture(jdbcTemplate, clock, BRANCH_ID, "010-9300-");
         fixture.createBranch();
     }
 
@@ -53,7 +57,7 @@ class MembershipReRegisterApiTest {
     void staleActiveByPastStartDate() throws Exception {
         // given
         long memberId = fixture.createMember(1);
-        LocalDate today = MembershipApiFixture.today();
+        LocalDate today = fixture.today();
         register(MembershipRegisterApiTest.period(memberId, today.minusMonths(2), 1))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.status").value("ACTIVE"));
@@ -82,7 +86,7 @@ class MembershipReRegisterApiTest {
     void staleActiveEndedYesterday() throws Exception {
         // given
         long memberId = fixture.createMember(2);
-        LocalDate today = MembershipApiFixture.today();
+        LocalDate today = fixture.today();
         fixture.insertPeriodMembership(memberId, "ACTIVE", today.minusMonths(1), today.minusDays(1));
 
         // when
@@ -98,7 +102,7 @@ class MembershipReRegisterApiTest {
     void stalePausedEndedYesterday() throws Exception {
         // given
         long memberId = fixture.createMember(3);
-        LocalDate today = MembershipApiFixture.today();
+        LocalDate today = fixture.today();
         fixture.insertPeriodMembership(memberId, "PAUSED", today.minusMonths(1), today.minusDays(1));
 
         // when
@@ -114,7 +118,7 @@ class MembershipReRegisterApiTest {
     void activeEndsToday() throws Exception {
         // given
         long memberId = fixture.createMember(4);
-        LocalDate today = MembershipApiFixture.today();
+        LocalDate today = fixture.today();
         fixture.insertPeriodMembership(memberId, "ACTIVE", today.minusMonths(1), today);
 
         // when
@@ -131,7 +135,7 @@ class MembershipReRegisterApiTest {
     void expiredOrCanceledOnly() throws Exception {
         // given
         long memberId = fixture.createMember(5);
-        LocalDate today = MembershipApiFixture.today();
+        LocalDate today = fixture.today();
         fixture.insertPeriodMembership(memberId, "EXPIRED", today.minusMonths(1), today.plusDays(10));
         fixture.insertPeriodMembership(memberId, "CANCELED", today.minusMonths(1), today.plusDays(10));
 
@@ -148,7 +152,7 @@ class MembershipReRegisterApiTest {
     void activeInOtherBranch() throws Exception {
         // given
         long memberId = fixture.createMember(6);
-        LocalDate today = MembershipApiFixture.today();
+        LocalDate today = fixture.today();
         jdbcTemplate.update(
                 "INSERT INTO membership (member_id, branch_id, type, status, start_date, end_date, months, price,"
                         + " created_at, updated_at)"

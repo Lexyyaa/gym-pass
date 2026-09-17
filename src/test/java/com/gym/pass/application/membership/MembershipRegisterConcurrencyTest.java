@@ -6,9 +6,9 @@ import com.gym.pass.domain.exception.ErrorCode;
 import com.gym.pass.domain.membership.exception.MembershipException;
 import com.gym.pass.support.ConcurrencyRunner;
 import com.gym.pass.support.IntegrationTest;
+import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.ZoneId;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.AfterEach;
@@ -25,13 +25,15 @@ class MembershipRegisterConcurrencyTest {
     private static final int THREADS = 10;
     private static final long BRANCH_ID = 940_001L;
     private static final String PHONE_PREFIX = "010-9400-";
-    private static final ZoneId KST = ZoneId.of("Asia/Seoul");
 
     @Autowired
     private MembershipApplicationService membershipApplicationService;
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
+
+    @Autowired
+    private Clock clock;
 
     @AfterEach
     void tearDown() {
@@ -50,7 +52,7 @@ class MembershipRegisterConcurrencyTest {
                 "INSERT INTO branch (id, name, created_at, updated_at) VALUES (?, '동시성테스트점', NOW(6), NOW(6))",
                 BRANCH_ID);
         long memberId = createMember();
-        LocalDate today = LocalDate.now(KST);
+        LocalDate today = LocalDate.now(clock);
 
         // when
         List<ConcurrencyRunner.Result<MembershipInfo.Registered>> results = ConcurrencyRunner.run(
@@ -99,9 +101,9 @@ class MembershipRegisterConcurrencyTest {
                         "phone",
                         PHONE_PREFIX + "0001",
                         "created_at",
-                        LocalDateTime.now(KST),
+                        LocalDateTime.now(clock),
                         "updated_at",
-                        LocalDateTime.now(KST)))
+                        LocalDateTime.now(clock)))
                 .longValue();
     }
 }
