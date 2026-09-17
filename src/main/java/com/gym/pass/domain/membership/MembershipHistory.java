@@ -84,4 +84,16 @@ public class MembershipHistory extends BaseTimeEntity {
                 null,
                 membership.getRemainingCount());
     }
+
+    /** 차감 이벤트. 종료일은 바뀌지 않으므로 잔여 횟수 before/after만 남긴다. */
+    static MembershipHistory deducted(Membership membership, int remainingCountBefore) {
+        return new MembershipHistory(
+                membership.getMemberId(),
+                membership.getBranchId(),
+                MembershipEventType.DEDUCTED,
+                null,
+                null,
+                remainingCountBefore,
+                membership.getRemainingCount());
+    }
 }

@@ -1,5 +1,7 @@
 package com.gym.pass.domain.membership;
 
+import com.gym.pass.domain.attendance.exception.AttendanceException;
+import com.gym.pass.domain.branch.exception.BranchException;
 import com.gym.pass.domain.common.BaseTimeEntity;
 import com.gym.pass.domain.exception.ErrorCode;
 import com.gym.pass.domain.membership.exception.MembershipException;
@@ -104,6 +106,54 @@ public class Membership extends BaseTimeEntity {
         Membership membership = new Membership(registration);
         membership.histories.add(MembershipHistory.registered(membership));
         return membership;
+    }
+
+    /** 다른 지점의 회원권이면 BRANCH_FORBIDDEN (NFR-1 · TC-3-08). */
+    public void verifyBranch(Long requestBranchId) {
+        if (!branchId.equals(requestBranchId)) {
+            throw new BranchException(ErrorCode.BRANCH_FORBIDDEN);
+        }
+    }
+
+    /** 출입 판정 대상 조건(ACTIVE · PAUSED, 종료일 ≥ today)을 만족하는지 (D-19 · 03 §7 조회 조건과 같다). */
+    public boolean isEntryCandidateOn(LocalDate today) {
+        return status.isUsable() && !today.isAfter(endDate);
+    }
+
+    /**
+     * 출입 가능 판정 (FR-3.2 · H-10 · D-27). 저장 상태가 아니라 날짜 · 잔여 · 오늘 차감 여부로 직접 검사한다.
+     * 횟수제는 잔여 ≥ 1 또는 오늘(KST) 이미 차감된 출입이 있으면 허용한다.
+     * deductedToday는 오늘 deducted=true 출입 기록이 있는지이며, membership 행 락을 잡은 뒤에 조회한 값이어야 한다.
+     * 정지 구간 검사(FR-4.4 · ATTENDANCE_MEMBERSHIP_PAUSED)는 MembershipPause와 함께 F4에서 여기에 더한다.
+     */
+    public void validateEntry(LocalDate today, boolean deductedToday) {
+        if (!isWithinPeriodOn(today) || !hasEntryCountFor(deductedToday)) {
+            throw new AttendanceException(ErrorCode.ATTENDANCE_NO_VALID_MEMBERSHIP);
+        }
+    }
+
+    /**
+     * 출입 1회분 차감 (FR-3.3 · FR-5.5). 차감이 일어났으면 true.
+     * 차감 대상이 아닌 종류는 아무것도 바꾸지 않는다. 잔여 0에서는 차감할 수 없다.
+     * 잔여가 0이 돼도 상태는 그대로 둔다. EXPIRED 전이는 00:00 상태 동기화 배치가 한다 (D-27).
+     */
+    public boolean deduct(LocalDate today) {
+        validateEntry(today, false);
+        if (!type.deductible()) {
+            return false;
+        }
+        int before = remainingCount;
+        remainingCount = before - 1;
+        histories.add(MembershipHistory.deducted(this, before));
+        return true;
+    }
+
+    private boolean isWithinPeriodOn(LocalDate today) {
+        return status.isUsable() && !today.isBefore(startDate) && !today.isAfter(endDate);
+    }
+
+    private boolean hasEntryCountFor(boolean deductedToday) {
+        return !type.deductible() || deductedToday || (remainingCount != null && remainingCount >= 1);
     }
 
     private static void validate(MembershipRegistration registration, MembershipLimits limits) {

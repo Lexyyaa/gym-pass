@@ -1,0 +1,144 @@
+@host = http://localhost:8080
+
+# F3 출입 — API-3
+# seed(03 §9): 회원 1(지점 1 기간제 ACTIVE) · 2(지점 1 횟수제 10회 ACTIVE) · 3(EXPIRED만) · 4(지점 2 기간제 ACTIVE)
+# 빈 DB에서 이 파일만 실행하는 것을 전제한다 (registration.http와 독립)
+# 도달하지 않는 에러
+# - ATTENDANCE_MEMBERSHIP_PAUSED: 정지 API · 정지 구간 판정이 F4 — F4 .http에서 확인
+
+### [TC-3-01] 유효 기간제 회원권으로 출입 → 차감 없음
+# @expect 200
+# @expect $.membershipId == 1
+# @db SELECT COUNT(*) FROM attendance_record WHERE member_id = 1 AND branch_id = 1 AND membership_id = 1 => 1
+# @db SELECT COUNT(*) FROM attendance_record WHERE member_id = 1 AND deducted = 1 => 0
+POST {{host}}/api/attendances
+Content-Type: application/json
+X-Branch-Id: 1
+
+{ "memberId": 1 }
+
+### [TC-3-02] 횟수제 첫 출입 → 잔여 10 → 9
+# @expect 200
+# @expect $.membershipId == 2
+# @db SELECT remaining_count FROM membership WHERE id = 2 => 9
+# @db SELECT COUNT(*) FROM attendance_record WHERE member_id = 2 AND deducted = 1 => 1
+# @db SELECT COUNT(*) FROM membership_history WHERE membership_id = 2 AND event_type = 'DEDUCTED' AND remaining_count_before = 10 AND remaining_count_after = 9 => 1
+POST {{host}}/api/attendances
+Content-Type: application/json
+X-Branch-Id: 1
+
+{ "memberId": 2 }
+
+### [TC-3-03] 같은 날 두 번째 출입 → 같은 성공 응답, 기록만 추가, 잔여 그대로
+# @expect 200
+# @expect $.membershipId == 2
+# @db SELECT remaining_count FROM membership WHERE id = 2 => 9
+# @db SELECT COUNT(*) FROM attendance_record WHERE member_id = 2 => 2
+# @db SELECT COUNT(*) FROM attendance_record WHERE member_id = 2 AND deducted = 1 => 1
+# @db SELECT COUNT(*) FROM membership_history WHERE membership_id = 2 AND event_type = 'DEDUCTED' => 1
+POST {{host}}/api/attendances
+Content-Type: application/json
+X-Branch-Id: 1
+
+{ "memberId": 2 }
+
+### [TC-3-04] 만료 회원권만 가진 회원 3 → 409, 기록 없음
+# @expect 409
+# @expect $.errorCode == "ATTENDANCE_NO_VALID_MEMBERSHIP"
+# @db SELECT COUNT(*) FROM attendance_record WHERE member_id = 3 => 0
+POST {{host}}/api/attendances
+Content-Type: application/json
+X-Branch-Id: 1
+
+{ "memberId": 3 }
+
+### [TC-3-08] 지점 2 소속 회원권(회원 4)으로 지점 1에서 출입 → 403, 기록 없음
+# @expect 403
+# @expect $.errorCode == "BRANCH_FORBIDDEN"
+# @db SELECT COUNT(*) FROM attendance_record WHERE member_id = 4 => 0
+POST {{host}}/api/attendances
+Content-Type: application/json
+X-Branch-Id: 1
+
+{ "memberId": 4 }
+
+### [TC-3-08-소속지점] 같은 회원 4가 소속 지점 2에서 출입 → 200
+# @expect 200
+# @expect $.membershipId == 4
+# @db SELECT COUNT(*) FROM attendance_record WHERE member_id = 4 AND branch_id = 2 => 1
+POST {{host}}/api/attendances
+Content-Type: application/json
+X-Branch-Id: 2
+
+{ "memberId": 4 }
+
+### [TC-3-09] 없는 회원 → 404, 기록 없음
+# @expect 404
+# @expect $.errorCode == "MEMBER_NOT_FOUND"
+# @db SELECT COUNT(*) FROM attendance_record WHERE member_id = 999999 => 0
+POST {{host}}/api/attendances
+Content-Type: application/json
+X-Branch-Id: 1
+
+{ "memberId": 999999 }
+
+### [TC-1-03] X-Branch-Id 헤더 누락 → 400, 기록 없음
+# @expect 400
+# @expect $.errorCode == "COMMON_INVALID_INPUT"
+# @db SELECT COUNT(*) FROM attendance_record WHERE member_id = 1 => 1
+POST {{host}}/api/attendances
+Content-Type: application/json
+
+{ "memberId": 1 }
+
+### [TC-3-01-검증] memberId 누락 → 400
+# @expect 400
+# @expect $.errorCode == "COMMON_INVALID_INPUT"
+POST {{host}}/api/attendances
+Content-Type: application/json
+X-Branch-Id: 1
+
+{ }
+
+### [TC-3-06-준비] 잔여 1회 검증용 회원 등록
+# @expect 201
+# @db SELECT COUNT(*) FROM member WHERE phone = '010-9100-0001' => 1
+POST {{host}}/api/members
+Content-Type: application/json
+X-Branch-Id: 1
+
+{ "name": "오세진", "phone": "010-9100-0001" }
+
+### [TC-3-06-준비2] 횟수제 1회 회원권 등록 (오늘 시작)
+# @uses oneShotMemberId = [TC-3-06-준비].$.memberId
+# @expect 201
+# @expect $.remainingCount == 1
+# @db SELECT remaining_count FROM membership WHERE member_id = {{oneShotMemberId}} => 1
+POST {{host}}/api/memberships
+Content-Type: application/json
+X-Branch-Id: 1
+
+{ "memberId": {{oneShotMemberId}}, "type": "COUNT", "startDate": "2026-09-17", "count": 1, "paymentAmount": 20000 }
+
+### [TC-3-06] 잔여 1회 출입 → 잔여 0, 당일은 상태 유지 (D-27)
+# @uses oneShotMemberId = [TC-3-06-준비].$.memberId
+# @expect 200
+# @db SELECT remaining_count FROM membership WHERE member_id = {{oneShotMemberId}} => 0
+# @db SELECT status FROM membership WHERE member_id = {{oneShotMemberId}} => ACTIVE
+POST {{host}}/api/attendances
+Content-Type: application/json
+X-Branch-Id: 1
+
+{ "memberId": {{oneShotMemberId}} }
+
+### [TC-3-06-당일재출입] 잔여 0이어도 오늘 이미 차감됐으면 같은 성공 응답, 차감 없음 (D-27)
+# @uses oneShotMemberId = [TC-3-06-준비].$.memberId
+# @expect 200
+# @db SELECT COUNT(*) FROM attendance_record WHERE member_id = {{oneShotMemberId}} => 2
+# @db SELECT COUNT(*) FROM attendance_record WHERE member_id = {{oneShotMemberId}} AND deducted = 1 => 1
+# @db SELECT remaining_count FROM membership WHERE member_id = {{oneShotMemberId}} => 0
+POST {{host}}/api/attendances
+Content-Type: application/json
+X-Branch-Id: 1
+
+{ "memberId": {{oneShotMemberId}} }
