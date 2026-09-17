@@ -287,7 +287,7 @@ stateDiagram-v2
 | 이름 | 위치 | 하는 일 | 관련 FR |
 |---|---|---|---|
 | `MembershipRegistrationService` | `membership` | member 행 락 → 종료일 ≥ 오늘인 `ACTIVE` · `PAUSED` 존재 검사 → 등록 (애그리거트 2개 경유) | FR-2.3 · NFR-3 |
-| `AttendanceService` | `attendance` | membership 행 락 → 유효 검사 → 오늘 첫 출입이면 차감 → 기록 (한 트랜잭션) | FR-3.1~3.4 · NFR-2 · NFR-4 |
+| `AttendanceService` | `attendance` | member 행 락 → membership 행 락 → 유효 검사 → 오늘 첫 출입이면 차감 → 기록 (한 트랜잭션, D-26) | FR-3.1~3.4 · NFR-2 · NFR-4 |
 | `NotificationBatch` | `notification` | 09:00 대상 선정(신규 + 실패 재시도) → 발송 → 이력 기록 | FR-6.1~6.4 |
 | `MembershipStatusSyncBatch` | `membership` | 00:00 조건부 bulk UPDATE 3단계 (만료 → 정지 종료 → 정지 시작) | FR-5.6 |
 | `MembershipType`별 정책 | `membership` | 종료일 계산(D-6 · D-7) · 차감 대상 여부 분기 (다형성 지점) | FR-2.4 |
@@ -442,7 +442,7 @@ erDiagram
 
 | 지점 | 경합 시나리오 | 제어 방식 | 트랜잭션 경계 | 검증 |
 |---|---|---|---|---|
-| 출입 차감 (KST 하루 1회, D-5) | 같은 회원 출입 요청 N건 동시 (S-37) | membership 행 비관적 락(PK `FOR UPDATE`) → `attendance_record`에서 오늘(`entry_date`) `deducted=true` 존재 검사 → 첫 출입만 차감 | 출입 API 1건 = 1트랜잭션 (기록 + 차감 원자, NFR-4) | TC-3-07 (NFR-2) |
+| 출입 차감 (KST 하루 1회, D-5) | 같은 회원 출입 요청 N건 동시 (S-37) | member 행 PK `FOR UPDATE` → 후보 membership 조회 → membership 행 PK `FOR UPDATE` → `attendance_record`에서 오늘(`entry_date`) `deducted=true` 존재 검사 → 첫 출입만 차감 (D-26) | 출입 API 1건 = 1트랜잭션 (기록 + 차감 원자, NFR-4) | TC-3-07 (NFR-2) |
 | 회원권 등록 | 같은 회원에 등록 요청 2건 동시 | member 행 비관적 락(PK `FOR UPDATE`)으로 직렬화 → 종료일 ≥ 오늘인 `ACTIVE` · `PAUSED` 존재 검사 → 삽입 | 등록 API 1건 = 1트랜잭션 | TC-2-06 (NFR-3) |
 | 안내 발송 | 배치 재실행 · 중복 실행 | `notification_record` UNIQUE `(membership_id, type, base_date)` — 삽입 충돌 시 해당 건 스킵 | 발송 1건 = 이력 1건 커밋 (건별 트랜잭션) | TC-6-04 (NFR-7) |
 | 상태 동기화 (00:00, D-21) | 배치 재실행 · 같은 회원권의 정지 · 해제 · 출입과 동시 | 현재 상태를 WHERE에 넣은 조건부 bulk UPDATE — InnoDB가 조건에 맞는 행만 쓰기 잠금 | 단계 1개 = UPDATE 1문 = 1트랜잭션 (§5 순서) | TC-5-06 · TC-5-07 · TC-5-09 |
@@ -452,12 +452,12 @@ erDiagram
   - 부모(member) 행 락으로 검사-삽입 구간을 직렬화한다 — 이것이 02의 "DB 수준 방어"다
   - 락 조회를 트랜잭션의 첫 쿼리로 둔다. REPEATABLE READ 스냅샷이 첫 일반 조회 시점에 잡히므로, 락 앞에 일반 SELECT가 있으면 먼저 커밋된 등록을 못 본다.
 - 차감 판정도 조건부(오늘 첫 출입)라 조건부 UPDATE보다 락 + 검사가 단순하다
-  - 두 락 모두 PK 등호 조회라 잠금 범위가 1행이다 (인덱스 필수 조건 충족)
+  - 락 순서와 범위는 D-26 — member 행 → membership 행, 각 PK 1행
 - 출입 판정 대상 회원권은 항상 1건 이하다
   - 조회 조건 = `member_id = ? AND status IN ('ACTIVE','PAUSED') AND end_date >= :today`
   - 등록 규칙(C-22 → D-15)이 이 조건에 맞는 회원권을 회원당 1건으로 제한한다
-  - 그래서 "어느 회원권으로 판정 · 차감할지" 고르는 규칙이 필요 없고, 락 대상도 1행이다
-- 정지 · 해제 · 취소도 같은 membership 행 락을 공유해 상한 검사 경합을 직렬화한다
+  - 그래서 "어느 회원권으로 판정 · 차감할지" 고르는 규칙이 필요 없다
+- 정지 · 해제 · 취소도 D-26 순서(member 행 → membership 행)로 잠가 상한 검사 경합을 직렬화한다
 - 상태 동기화 배치는 행 락을 먼저 잡지 않는다
   - bulk UPDATE는 최신 커밋 행을 다시 읽고 WHERE를 평가하므로, 정지 · 해제가 먼저 커밋되면 그 결과를 기준으로 전이한다
   - 정지 · 해제 트랜잭션이 행 락을 쥐고 있으면 해당 행에서 대기한다 — 00:00은 출입 저부하 시간대다
