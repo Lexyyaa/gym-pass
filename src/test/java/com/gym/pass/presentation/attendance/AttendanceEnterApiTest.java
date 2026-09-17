@@ -130,6 +130,31 @@ class AttendanceEnterApiTest {
     }
 
     @Test
+    @DisplayName("[TC-3-03] 같은 날 두 번째 출입도 같은 200 응답이고 기록은 2건 · 잔여는 첫 출입 후 그대로다")
+    void secondEntrySameDay() throws Exception {
+        // given
+        long memberId = fixture.createMember(7);
+        LocalDate today = fixture.today();
+        long membershipId =
+                fixture.insertCountMembership(memberId, BRANCH_ID, "ACTIVE", today, today.plusMonths(6), 10);
+        enter(memberId).andExpect(status().isOk());
+        assertThat(fixture.remainingCount(membershipId)).isEqualTo(9);
+
+        // when
+        ResultActions result = enter(memberId);
+
+        // then
+        result.andExpect(status().isOk())
+                .andExpect(jsonPath("$.attendanceId").isNumber())
+                .andExpect(jsonPath("$.membershipId").value(membershipId))
+                .andExpect(jsonPath("$.attendedAt").value(startsWith(today.toString())));
+        assertThat(fixture.countAttendances(memberId)).isEqualTo(2);
+        assertThat(fixture.countDeductedAttendances(membershipId)).isEqualTo(1);
+        assertThat(fixture.remainingCount(membershipId)).isEqualTo(9);
+        assertThat(fixture.countDeductedHistories(membershipId)).isEqualTo(1);
+    }
+
+    @Test
     @DisplayName("[TC-3-04] 회원권이 없는 회원이 출입하면 409 ATTENDANCE_NO_VALID_MEMBERSHIP이고 기록이 없다")
     void noMembership() throws Exception {
         // given

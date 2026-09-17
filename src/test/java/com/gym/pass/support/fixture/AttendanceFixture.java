@@ -93,6 +93,20 @@ public class AttendanceFixture {
                 .longValue();
     }
 
+    /** 이미 출입한 상태 준비용 출입 기록. */
+    public void insertAttendance(
+            long memberId, long membershipId, long branchId, LocalDateTime entryAt, boolean deducted) {
+        jdbcTemplate.update(
+                "INSERT INTO attendance_record (member_id, membership_id, branch_id, entry_at, entry_date, deducted,"
+                        + " created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, NOW(6), NOW(6))",
+                memberId,
+                membershipId,
+                branchId,
+                entryAt,
+                entryAt.toLocalDate(),
+                deducted);
+    }
+
     public int countAttendances(long memberId) {
         return jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM attendance_record WHERE member_id = ?", Integer.class, memberId);
