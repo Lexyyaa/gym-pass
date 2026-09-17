@@ -633,6 +633,47 @@ class MembershipPauseApiTest {
         assertThat(fixture.countHistories(membershipId, "RESUMED")).isZero();
     }
 
+    @Test
+    @DisplayName("[TC-4-18] 정지 시작일이 회원권 종료일 뒤면 400 PAUSE_OUT_OF_PERIOD이고 종료일 · 정지 건수가 그대로다")
+    void startDateAfterEndDate() throws Exception {
+        // given
+        LocalDate today = fixture.today();
+        long memberId = fixture.createMember(26);
+        LocalDate endDate = today.plusMonths(1);
+        long membershipId = fixture.insertPeriodMembership(memberId, BRANCH_ID, "ACTIVE", today, endDate, 1);
+
+        // when
+        ResultActions result = pause(membershipId, endDate.plusDays(1), 3);
+
+        // then
+        result.andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errorCode").value("PAUSE_OUT_OF_PERIOD"));
+        assertThat(fixture.endDate(membershipId)).isEqualTo(endDate);
+        assertThat(fixture.countPauses(membershipId)).isZero();
+        assertThat(fixture.countHistories(membershipId, "PAUSED")).isZero();
+    }
+
+    @Test
+    @DisplayName("[TC-4-18] 정지 시작일이 회원권 시작일 앞이면 400 PAUSE_OUT_OF_PERIOD이고 종료일 · 정지 건수가 그대로다")
+    void startDateBeforeMembershipStart() throws Exception {
+        // given — 다음 주에 시작하는 회원권
+        LocalDate today = fixture.today();
+        long memberId = fixture.createMember(27);
+        LocalDate startDate = today.plusDays(7);
+        LocalDate endDate = startDate.plusMonths(1);
+        long membershipId = fixture.insertPeriodMembership(memberId, BRANCH_ID, "ACTIVE", startDate, endDate, 1);
+
+        // when
+        ResultActions result = pause(membershipId, startDate.minusDays(1), 3);
+
+        // then
+        result.andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errorCode").value("PAUSE_OUT_OF_PERIOD"));
+        assertThat(fixture.endDate(membershipId)).isEqualTo(endDate);
+        assertThat(fixture.countPauses(membershipId)).isZero();
+        assertThat(fixture.countHistories(membershipId, "PAUSED")).isZero();
+    }
+
     private ResultActions pause(long membershipId, LocalDate startDate, int days) throws Exception {
         return perform(membershipId, Map.of("startDate", startDate.toString(), "days", days));
     }

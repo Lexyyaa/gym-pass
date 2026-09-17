@@ -160,10 +160,10 @@ public class Membership extends BaseTimeEntity {
     }
 
     /**
-     * 정지 등록 (FR-4.1 ~ FR-4.3 · D-2 · D-8 · D-19 · D-28). 등록한 정지를 돌려준다.
+     * 정지 등록 (FR-4.1 ~ FR-4.3 · D-2 · D-8 · D-19 · D-28 · D-29 · D-30). 등록한 정지를 돌려준다.
      * 예정 일수만큼 종료일을 즉시 늘리고 PAUSED 이력을 남긴다. 시작일이 오늘이면 PAUSED로 전이한다 (03 §4).
      * 상한은 설정값이다.
-     * 검사 순서: 입력 → 소급 → 시작일 상한 → 정지 가능 상태 → 당일 출입 → 횟수 → 누적 일수 → 겹침 → 연장 후 날짜 범위.
+     * 검사 순서: 입력 → 소급 → 시작일 상한 → 정지 가능 상태 → 기간 범위(D-29) → 당일 출입 → 횟수 → 누적 일수 → 겹침 → 연장 후 날짜 범위.
      * 날짜 계산(plusDays)은 시작일 상한 검사 뒤에만 한다. 범위 밖 입력이 DateTimeException으로 새지 않게 한다.
      * enteredToday는 이 회원권의 오늘(KST) 출입 기록 존재 여부(차감 무관)이며, 락을 잡은 뒤에 조회한 값이어야 한다 (D-30).
      */
@@ -184,6 +184,9 @@ public class Membership extends BaseTimeEntity {
         }
         if (!isPausableOn(today)) {
             throw new MembershipException(ErrorCode.MEMBERSHIP_NOT_PAUSABLE);
+        }
+        if (pauseStartDate.isBefore(startDate) || pauseStartDate.isAfter(endDate)) {
+            throw new MembershipException(ErrorCode.PAUSE_OUT_OF_PERIOD);
         }
         if (enteredToday && pauseStartDate.isEqual(today)) {
             throw new MembershipException(ErrorCode.PAUSE_START_DATE_USED);

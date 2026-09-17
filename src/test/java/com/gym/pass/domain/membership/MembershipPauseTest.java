@@ -511,6 +511,75 @@ class MembershipPauseTest {
         assertThat(membership.getHistories()).hasSize(2);
     }
 
+    @Test
+    @DisplayName("[TC-4-18] 시작일이 회원권 시작일 앞이거나 현재 종료일 뒤면 PAUSE_OUT_OF_PERIOD이고 아무것도 바뀌지 않는다")
+    void outOfPeriod() {
+        // given — 회원권 기간 TODAY+5 ~ 종료일
+        Membership membership = periodFrom(TODAY.plusDays(5), 3);
+        LocalDate endDate = membership.getEndDate();
+
+        // when / then
+        assertMembershipError(
+                () -> membership.pause(TODAY.plusDays(4), 1, TODAY, false, PAUSE_LIMITS),
+                ErrorCode.PAUSE_OUT_OF_PERIOD);
+        assertMembershipError(
+                () -> membership.pause(TODAY, 1, TODAY, false, PAUSE_LIMITS), ErrorCode.PAUSE_OUT_OF_PERIOD);
+        assertMembershipError(
+                () -> membership.pause(endDate.plusDays(1), 1, TODAY, false, PAUSE_LIMITS),
+                ErrorCode.PAUSE_OUT_OF_PERIOD);
+        assertUnchanged(membership, endDate);
+    }
+
+    @Test
+    @DisplayName("[TC-4-18] 시작일 = 회원권 시작일, 시작일 = 현재 종료일은 등록된다 (경계)")
+    void periodBoundary() {
+        // given
+        LocalDate membershipStart = TODAY.plusDays(5);
+        Membership onStart = periodFrom(membershipStart, 3);
+        LocalDate onStartEndDate = onStart.getEndDate();
+        Membership onEnd = periodFrom(membershipStart, 3);
+        LocalDate onEndEndDate = onEnd.getEndDate();
+
+        // when
+        onStart.pause(membershipStart, 2, TODAY, false, PAUSE_LIMITS);
+        onEnd.pause(onEndEndDate, 2, TODAY, false, PAUSE_LIMITS);
+
+        // then
+        assertThat(onStart.getPauses()).hasSize(1);
+        assertThat(onStart.getEndDate()).isEqualTo(onStartEndDate.plusDays(2));
+        assertThat(onEnd.getPauses()).hasSize(1);
+        assertThat(onEnd.getPauses().get(0).getEndDate()).isEqualTo(onEndEndDate.plusDays(1));
+        assertThat(onEnd.getEndDate()).isEqualTo(onEndEndDate.plusDays(2));
+    }
+
+    @Test
+    @DisplayName("[TC-4-18] 앞선 정지로 늘어난 종료일까지는 시작일로 허용하고, 그 다음 날은 PAUSE_OUT_OF_PERIOD다")
+    void extendedEndDateIsUpperBound() {
+        // given — 1개월권에 3일 정지를 걸어 종료일이 3일 늘었다
+        Membership membership = period(1);
+        LocalDate originalEndDate = membership.getEndDate();
+        membership.pause(TODAY.plusDays(1), 3, TODAY, false, PAUSE_LIMITS);
+        LocalDate extendedEndDate = membership.getEndDate();
+
+        // when
+        membership.pause(originalEndDate.plusDays(3), 1, TODAY, false, PAUSE_LIMITS);
+
+        // then
+        assertThat(extendedEndDate).isEqualTo(originalEndDate.plusDays(3));
+        assertThat(membership.getPauses()).hasSize(2);
+        LocalDate latestEndDate = membership.getEndDate();
+        assertMembershipError(
+                () -> membership.pause(latestEndDate.plusDays(1), 1, TODAY, false, PAUSE_LIMITS),
+                ErrorCode.PAUSE_OUT_OF_PERIOD);
+        assertThat(membership.getPauses()).hasSize(2);
+        assertThat(membership.getEndDate()).isEqualTo(latestEndDate);
+    }
+
+    private static Membership periodFrom(LocalDate startDate, int months) {
+        return Membership.register(
+                new MembershipRegistration(7L, 3L, MembershipType.PERIOD, startDate, months, null, 100_000L), LIMITS);
+    }
+
     private static Membership period(int months) {
         return Membership.register(
                 new MembershipRegistration(7L, 3L, MembershipType.PERIOD, TODAY, months, null, 100_000L), LIMITS);
