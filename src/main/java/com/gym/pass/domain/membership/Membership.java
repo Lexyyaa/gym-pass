@@ -225,7 +225,8 @@ public class Membership extends BaseTimeEntity {
      * 해제 당일까지 정지로 치고, 미사용 일수만큼 종료일을 되돌린 뒤 RESUMED 이력을 남긴다.
      * PAUSED 상태는 해제 대상을 뺀 다른 정지가 오늘을 포함하지 않으면 ACTIVE로 바꾼다 (03 §4).
      * 회원권이 EXPIRED · CANCELED(종결 상태)면 PAUSE_NOT_RELEASABLE이다 (03 §4 · API-5).
-     * 해제 후 종료일보다 늦게 시작하는 미해제 정지가 남으면 PAUSE_NOT_RELEASABLE이다. 뒤의 정지를 먼저 해제한다 (C-40 → D-29 보충).
+     * 해제 후 종료일보다 늦게 끝나는 미해제 정지가 남으면 PAUSE_NOT_RELEASABLE이다. 뒤의 정지를 먼저 해제한다 (C-40 → D-29 보충).
+     * 이미 끝난 미해제 정지는 따로 빼지 않는다. 해제 후 종료일은 항상 오늘 이후라 그런 정지가 걸리지 않는다.
      */
     public MembershipPause releasePause(Long pauseId, LocalDate today) {
         MembershipPause target = pauses.stream()
@@ -238,7 +239,7 @@ public class Membership extends BaseTimeEntity {
         LocalDate releasedEndDate = endDate.minusDays(target.unusedDaysIfReleasedOn(today));
         boolean leavesPauseOutOfPeriod = pauses.stream()
                 .filter(pause -> pause != target)
-                .anyMatch(pause -> pause.isUnreleasedStartingAfter(releasedEndDate));
+                .anyMatch(pause -> pause.isUnreleasedEndingAfter(releasedEndDate));
         if (leavesPauseOutOfPeriod) {
             throw new MembershipException(ErrorCode.PAUSE_NOT_RELEASABLE);
         }

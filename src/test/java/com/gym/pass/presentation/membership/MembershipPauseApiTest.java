@@ -732,6 +732,57 @@ class MembershipPauseApiTest {
         assertThat(fixture.countHistories(membershipId, "RESUMED")).isEqualTo(2);
     }
 
+    @Test
+    @DisplayName("[TC-4-20] 뒤의 여러 날 정지의 끝이 해제 후 종료일을 넘으면 409 PAUSE_NOT_RELEASABLE이고 종료일 · 해제일이 그대로다")
+    void releaseLeavingMultiDayPauseEndOutOfPeriod() throws Exception {
+        // given — A(내일부터 3일) → 종료일 +3, B(원래 종료일 + 2부터 2일) → 종료일 +5
+        LocalDate today = fixture.today();
+        long memberId = fixture.createMember(30);
+        LocalDate originalEndDate = today.plusMonths(1);
+        long membershipId = fixture.insertPeriodMembership(memberId, BRANCH_ID, "ACTIVE", today, originalEndDate, 1);
+        long first = pauseIdOf(pause(membershipId, today.plusDays(1), 3));
+        long second = pauseIdOf(pause(membershipId, originalEndDate.plusDays(2), 2));
+        LocalDate endDate = fixture.endDate(membershipId);
+
+        // when — 해제 후 종료일은 원래 + 2, B의 끝은 원래 + 3
+        ResultActions result = release(membershipId, first);
+
+        // then
+        result.andExpect(status().isConflict())
+                .andExpect(jsonPath("$.errorCode").value("PAUSE_NOT_RELEASABLE"));
+        assertThat(endDate).isEqualTo(originalEndDate.plusDays(5));
+        assertThat(fixture.endDate(membershipId)).isEqualTo(endDate);
+        assertThat(fixture.releasedDate(first)).isNull();
+        assertThat(fixture.releasedDate(second)).isNull();
+        assertThat(fixture.countHistories(membershipId, "RESUMED")).isZero();
+    }
+
+    @Test
+    @DisplayName("[TC-4-20] 뒤의 여러 날 정지의 끝이 해제 후 종료일과 같으면 200이고 종료일이 해제 대상 일수만큼 줄어든다 (경계)")
+    void releaseWithMultiDayPauseEndingOnNewEndDate() throws Exception {
+        // given — A(내일부터 3일), B(원래 종료일 + 1부터 2일) → 종료일 +5
+        LocalDate today = fixture.today();
+        long memberId = fixture.createMember(31);
+        LocalDate originalEndDate = today.plusMonths(1);
+        long membershipId = fixture.insertPeriodMembership(memberId, BRANCH_ID, "ACTIVE", today, originalEndDate, 1);
+        long first = pauseIdOf(pause(membershipId, today.plusDays(1), 3));
+        long second = pauseIdOf(pause(membershipId, originalEndDate.plusDays(1), 2));
+
+        // when — 해제 후 종료일 = 원래 + 2 = B의 끝
+        ResultActions result = release(membershipId, first);
+
+        // then
+        result.andExpect(status().isOk())
+                .andExpect(jsonPath("$.pauseId").value(first))
+                .andExpect(jsonPath("$.usedDays").value(0))
+                .andExpect(jsonPath("$.membershipEndDate")
+                        .value(originalEndDate.plusDays(2).toString()));
+        assertThat(fixture.endDate(membershipId)).isEqualTo(originalEndDate.plusDays(2));
+        assertThat(fixture.releasedDate(first)).isEqualTo(today);
+        assertThat(fixture.releasedDate(second)).isNull();
+        assertThat(fixture.countHistories(membershipId, "RESUMED")).isEqualTo(1);
+    }
+
     private ResultActions pause(long membershipId, LocalDate startDate, int days) throws Exception {
         return perform(membershipId, Map.of("startDate", startDate.toString(), "days", days));
     }

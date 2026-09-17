@@ -627,6 +627,7 @@ class MembershipPauseTest {
         assignId(outside.pause(TODAY.plusDays(1), 3, TODAY, false, PAUSE_LIMITS), 1L);
         assignId(outside.pause(originalEndDate.plusDays(2), 1, TODAY, false, PAUSE_LIMITS), 2L);
         LocalDate outsideEndDate = outside.getEndDate();
+        int outsideHistories = outside.getHistories().size();
 
         // when
         inside.releasePause(1L, TODAY);
@@ -635,6 +636,9 @@ class MembershipPauseTest {
         assertThat(inside.getEndDate()).isEqualTo(originalEndDate.plusDays(1));
         assertMembershipError(() -> outside.releasePause(1L, TODAY), ErrorCode.PAUSE_NOT_RELEASABLE);
         assertThat(outside.getEndDate()).isEqualTo(outsideEndDate);
+        assertThat(outside.getPauses())
+                .allSatisfy(pause -> assertThat(pause.getReleasedDate()).isNull());
+        assertThat(outside.getHistories()).hasSize(outsideHistories);
     }
 
     @Test
@@ -649,6 +653,7 @@ class MembershipPauseTest {
         assignId(rejected.pause(TODAY, 3, TODAY, false, PAUSE_LIMITS), 1L);
         assignId(rejected.pause(originalEndDate.plusDays(3), 1, TODAY, false, PAUSE_LIMITS), 2L);
         LocalDate rejectedEndDate = rejected.getEndDate();
+        int rejectedHistories = rejected.getHistories().size();
 
         // when — TODAY+1 해제: 2일 사용 · 1일 되돌림 → 새 종료일 = 원래 + 3 (B 시작일과 같음)
         allowed.releasePause(1L, TODAY.plusDays(1));
@@ -657,6 +662,41 @@ class MembershipPauseTest {
         assertThat(allowed.getEndDate()).isEqualTo(originalEndDate.plusDays(3));
         assertMembershipError(() -> rejected.releasePause(1L, TODAY), ErrorCode.PAUSE_NOT_RELEASABLE);
         assertThat(rejected.getEndDate()).isEqualTo(rejectedEndDate);
+        assertThat(rejected.getPauses())
+                .allSatisfy(pause -> assertThat(pause.getReleasedDate()).isNull());
+        assertThat(rejected.getHistories()).hasSize(rejectedHistories);
+    }
+
+    @Test
+    @DisplayName("[TC-4-20] 여러 날 정지는 시작일이 아니라 끝이 새 종료일을 넘으면 PAUSE_NOT_RELEASABLE이고, 끝이 새 종료일과 같으면 해제된다 (경계)")
+    void releaseMultiDayPauseEndBoundary() {
+        // given — A(TODAY+1, 3일) 해제 후 새 종료일 = 원래 + 2(B 2일분)
+        Membership overflow = period(1);
+        LocalDate originalEndDate = overflow.getEndDate();
+        assignId(overflow.pause(TODAY.plusDays(1), 3, TODAY, false, PAUSE_LIMITS), 1L);
+        MembershipPause overflowLater = overflow.pause(originalEndDate.plusDays(2), 2, TODAY, false, PAUSE_LIMITS);
+        assignId(overflowLater, 2L);
+        LocalDate overflowEndDate = overflow.getEndDate();
+        int overflowHistories = overflow.getHistories().size();
+        Membership fits = period(1);
+        assignId(fits.pause(TODAY.plusDays(1), 3, TODAY, false, PAUSE_LIMITS), 1L);
+        MembershipPause fitsLater = fits.pause(originalEndDate.plusDays(1), 2, TODAY, false, PAUSE_LIMITS);
+        assignId(fitsLater, 2L);
+
+        // when
+        fits.releasePause(1L, TODAY);
+
+        // then — overflow의 B는 원래 + 2 ~ 원래 + 3이라 끝이 새 종료일(원래 + 2)을 넘는다
+        assertThat(overflowLater.getStartDate()).isEqualTo(originalEndDate.plusDays(2));
+        assertThat(overflowLater.getEndDate()).isEqualTo(originalEndDate.plusDays(3));
+        assertMembershipError(() -> overflow.releasePause(1L, TODAY), ErrorCode.PAUSE_NOT_RELEASABLE);
+        assertThat(overflow.getEndDate()).isEqualTo(overflowEndDate);
+        assertThat(overflow.getPauses())
+                .allSatisfy(pause -> assertThat(pause.getReleasedDate()).isNull());
+        assertThat(overflow.getHistories()).hasSize(overflowHistories);
+        assertThat(fitsLater.getEndDate()).isEqualTo(originalEndDate.plusDays(2));
+        assertThat(fits.getEndDate()).isEqualTo(originalEndDate.plusDays(2));
+        assertThat(fitsLater.getReleasedDate()).isNull();
     }
 
     private static Membership periodFrom(LocalDate startDate, int months) {

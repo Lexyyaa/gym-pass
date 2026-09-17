@@ -110,9 +110,9 @@ public class MembershipPause extends BaseTimeEntity {
         return plannedDays() - usedDays;
     }
 
-    /** 미해제 정지이면서 date보다 늦게 시작하는지 (C-40 → D-29 보충). */
-    boolean isUnreleasedStartingAfter(LocalDate date) {
-        return !isReleased() && startDate.isAfter(date);
+    /** 미해제 정지이면서 정지 종료일이 date보다 늦은지 (C-40 → D-29 보충). */
+    boolean isUnreleasedEndingAfter(LocalDate date) {
+        return !isReleased() && endDate.isAfter(date);
     }
 
     private LocalDate effectiveEndDate() {
