@@ -160,6 +160,7 @@
 
 | 상태 | errorCode | 조건 |
 |---|---|---|
+| 400 | `MEMBER_INVALID_INPUT` | 도메인 검증 실패 (D-22, TC-2-12) |
 | 409 | `MEMBER_PHONE_DUPLICATED` | 연락처 중복 (FR-7.3 구현 시에만, 선택) |
 
 ### API-2. 회원권 등록 · `POST /api/memberships`
@@ -222,6 +223,7 @@
 
 | 상태 | errorCode | 조건 |
 |---|---|---|
+| 400 | `MEMBERSHIP_INVALID_INPUT` | `type`별 필수 값 누락 등 도메인 검증 실패 (D-22, TC-2-13) |
 | 404 | `MEMBER_NOT_FOUND` | 회원 없음 (TC-2-08) |
 | 409 | `MEMBERSHIP_ALREADY_ACTIVE` | 종료일 ≥ 오늘인 `ACTIVE` · `PAUSED` 회원권 보유 (TC-2-05 · TC-2-06 · TC-2-09 · TC-2-11) |
 
@@ -589,9 +591,6 @@
 
 코드의 `ErrorCode` enum과 1:1로 맞춘다. 새 에러는 여기 먼저 추가하고 코드에 반영한다.
 
-> 현재 `ErrorCode.java`의 공통 4개는 접두 없이 정의되어 있다.
-> 구현 시 아래 `COMMON_` 접두로 이름을 맞춘다.
-
 ### 공통
 
 | errorCode | HTTP | 메시지 | 발생 조건 |
@@ -605,9 +604,10 @@
 
 - 메시지
   - 본문 검증 실패 시 `필드: 사유`
+  - 헤더 오류 시 `X-Branch-Id: 숫자 지점 ID가 필요합니다.`
 - 발생 조건
-  - Bean Validation 실패 (`type`별 조건 필수 포함)
-  - `X-Branch-Id` 헤더 누락 · 숫자 아님 (TC-1-03)
+  - Request Bean Validation 실패 (도메인 검증 실패는 전용 코드, D-22)
+  - `X-Branch-Id` 헤더 누락 · 1~18자리 숫자가 아님 (TC-1-03)
   - 쿼리 파라미터 형식 · 범위 오류
   - 본문 파싱 실패
 
@@ -622,6 +622,7 @@
 
 | errorCode | HTTP | 메시지 | 발생 조건 | 예외 클래스 | API |
 |---|---|---|---|---|---|
+| `MEMBER_INVALID_INPUT` | 400 | 회원 정보가 올바르지 않습니다. | 도메인 생성 · 수정 검증 실패 — 공백 이름 · 형식 오류 연락처 (D-22, TC-2-12) | `MemberException` | API-1 · 9 |
 | `MEMBER_NOT_FOUND` | 404 | 회원을 찾을 수 없습니다. | 회원 ID가 DB에 없음 | `MemberException` | API-2 · 3 · 7 ~ 10 |
 | `MEMBER_PHONE_DUPLICATED` | 409 | 이미 등록된 연락처입니다. | 등록 · 수정 시 다른 회원과 연락처 중복 (선택) | `MemberException` | API-1 · 9 |
 | `MEMBER_HAS_RELATED_DATA` | 409 | 연관 데이터가 있어 삭제할 수 없습니다. | 회원권 · 출입 기록 보유 회원 삭제 (선택) | `MemberException` | API-10 |
@@ -630,6 +631,7 @@
 
 | errorCode | HTTP | 메시지 | 발생 조건 | 예외 클래스 | API |
 |---|---|---|---|---|---|
+| `MEMBERSHIP_INVALID_INPUT` | 400 | 회원권 정보가 올바르지 않습니다. | 기간제인데 개월 없음 · 횟수제인데 횟수 없음 등 도메인 등록 검증 실패 (D-22, TC-2-13) | `MembershipException` | API-2 |
 | `MEMBERSHIP_NOT_FOUND` | 404 | 회원권을 찾을 수 없습니다. | 회원권 ID가 DB에 없음 | `MembershipException` | API-4 · 5 · 11 |
 | `MEMBERSHIP_ALREADY_ACTIVE` | 409 | 이미 유효한 회원권이 있습니다. | 종료일 ≥ 오늘인 `ACTIVE` · `PAUSED` 회원권 보유 회원의 신규 등록 (D-15 · D-19) | `MembershipException` | API-2 |
 | `MEMBERSHIP_NOT_PAUSABLE` | 409 | 정지할 수 없는 회원권입니다. | 만료(종료일 < 오늘 포함) · 취소된 회원권 정지 요청 | `MembershipException` | API-4 |

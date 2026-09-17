@@ -25,8 +25,8 @@ import org.springframework.web.servlet.resource.NoResourceFoundException;
 /**
  * 모든 예외를 ErrorResponse로 바꾸는 단일 지점.
  * - BusinessException → ErrorCode의 HTTP 상태
- * - 입력 형식 오류(프레임워크 예외) → 400 INVALID_INPUT
- * - 그 외 → 500 INTERNAL_SERVER_ERROR (입력 오류가 여기로 오면 버그다)
+ * - 입력 형식 오류(프레임워크 예외) → 400 COMMON_INVALID_INPUT
+ * - 그 외 → 500 COMMON_INTERNAL_SERVER_ERROR (입력 오류가 여기로 오면 버그다)
  */
 @Slf4j
 @RestControllerAdvice
@@ -48,7 +48,7 @@ public class GlobalExceptionHandler {
         String detail = e.getBindingResult().getFieldErrors().stream()
                 .map(GlobalExceptionHandler::describe)
                 .findFirst()
-                .orElse(ErrorCode.INVALID_INPUT.getMessage());
+                .orElse(ErrorCode.COMMON_INVALID_INPUT.getMessage());
         log.info("입력값 검증 실패: {}", detail);
         return invalidInput(detail);
     }
@@ -59,7 +59,7 @@ public class GlobalExceptionHandler {
                 .findFirst()
                 .map(result -> result.getMethodParameter().getParameterName() + ": "
                         + result.getResolvableErrors().get(0).getDefaultMessage())
-                .orElse(ErrorCode.INVALID_INPUT.getMessage());
+                .orElse(ErrorCode.COMMON_INVALID_INPUT.getMessage());
         log.info("입력값 검증 실패: {}", detail);
         return invalidInput(detail);
     }
@@ -75,12 +75,12 @@ public class GlobalExceptionHandler {
     })
     public ResponseEntity<ErrorResponse> handleInvalidInput(Exception e) {
         log.info("입력 형식 오류: {}", e.getMessage());
-        return invalidInput(ErrorCode.INVALID_INPUT.getMessage());
+        return invalidInput(ErrorCode.COMMON_INVALID_INPUT.getMessage());
     }
 
     @ExceptionHandler({NoResourceFoundException.class, NoHandlerFoundException.class})
     public ResponseEntity<ErrorResponse> handleNoResource(Exception e) {
-        return respond(ErrorCode.RESOURCE_NOT_FOUND);
+        return respond(ErrorCode.COMMON_RESOURCE_NOT_FOUND);
     }
 
     /** 클라이언트가 JSON을 받지 않겠다고 한 경우. 본문을 만들 수 없으므로 상태만 돌려준다. */
@@ -91,18 +91,18 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
     public ResponseEntity<ErrorResponse> handleMethodNotSupported(HttpRequestMethodNotSupportedException e) {
-        return respond(ErrorCode.METHOD_NOT_ALLOWED);
+        return respond(ErrorCode.COMMON_METHOD_NOT_ALLOWED);
     }
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleUnexpected(Exception e) {
         log.error("처리되지 않은 서버 오류", e);
-        return respond(ErrorCode.INTERNAL_SERVER_ERROR);
+        return respond(ErrorCode.COMMON_INTERNAL_SERVER_ERROR);
     }
 
     private static ResponseEntity<ErrorResponse> invalidInput(String detail) {
-        return ResponseEntity.status(ErrorCode.INVALID_INPUT.getHttpStatus())
-                .body(ErrorResponse.of(ErrorCode.INVALID_INPUT, detail));
+        return ResponseEntity.status(ErrorCode.COMMON_INVALID_INPUT.getHttpStatus())
+                .body(ErrorResponse.of(ErrorCode.COMMON_INVALID_INPUT, detail));
     }
 
     private static ResponseEntity<ErrorResponse> respond(ErrorCode errorCode) {

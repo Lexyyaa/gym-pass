@@ -49,7 +49,7 @@
 - `MessageClient.send(...)`의 반환 타입은 `SendResult(boolean success, String failureReason)`다 (FR-6.5)
   - 발송 실패는 예외가 아니라 반환값(`success=false`)이다
   - 타임아웃은 별도 처리하지 않는다 — 가짜 구현의 지연 상한이 500ms라 배치 직렬 발송 범위에서 수용된다 (02 FR-6.5 상세 정책)
-- 에러 코드 접두는 `MEMBER_` · `MEMBERSHIP_` · `PAUSE_` · `ATTENDANCE_` · `BRANCH_` · `NOTIFICATION_`
+- 에러 코드 접두는 `COMMON_` · `MEMBER_` · `MEMBERSHIP_` · `PAUSE_` · `ATTENDANCE_` · `BRANCH_` (안내 배치는 HTTP 에러 코드 없음, 04 §2)
   - 구체 코드는 [04-api-spec.md](04-api-spec.md)가 정의한다
 
 **식별자 형식**
@@ -67,7 +67,7 @@
 | `membership` | `Membership` | `MembershipPause` · `MembershipHistory`(기록 엔티티) | 등록 · 종료일 계산 · 차감 · 정지 · 연장 · 취소 · 상태 전이 · 상태 동기화 · 변경 이력 | FR-2.2~2.4 · FR-3.3~3.4 · FR-4.1~4.4 · FR-5.5~5.6 · FR-7.4 |
 | `attendance` | `AttendanceRecord` | — | 출입 기록 · 출입 가능 판정 흐름 | FR-3.1~3.2 · FR-5.3 |
 | `notification` | `NotificationRecord` | `FakeMessageClient`(인프라) | 안내 대상 선정 · 발송 · 재시도 | FR-6.1~6.6 |
-| `common` | — | 공유 VO·Enum | 지점 헤더 파싱 · ErrorCode · 공통 예외 · 페이지 응답 | NFR-1 · NFR-8 |
+| `common` | — | 공유 VO·Enum | ErrorCode · 공통 예외 (지점 헤더 파싱 · 페이지 응답은 `support/web` — domain은 웹 계층을 참조하지 않는다) | NFR-1 · NFR-8 |
 
 - 애그리거트 간에는 객체가 아니라 식별자(`memberId` · `membershipId` · `branchId`)로 참조한다
 - FR-2.4(종류 추가 구조)는 `MembershipType`별 정책(종료일 계산 · 차감 여부)을 enum 메서드로 분리해 충족한다
@@ -96,8 +96,8 @@
 
 | 메서드 | 하는 일 | 실패 시 | 관련 FR |
 |---|---|---|---|
-| `create(name, phone)` | 이름 · 연락처 검증 후 생성 | `MEMBER_` 계열 400 | FR-2.1 |
-| `update(name, phone)` | 이름 · 연락처 수정 | `MEMBER_` 계열 400 | FR-7.1 |
+| `create(name, phone)` | 이름 · 연락처 검증 후 생성 | `MEMBER_INVALID_INPUT` 400 (D-22) | FR-2.1 |
+| `update(name, phone)` | 이름 · 연락처 수정 | `MEMBER_INVALID_INPUT` 400 (D-22) | FR-7.1 |
 
 **불변식** (서비스의 if문이 아니라 이 애그리거트가 스스로 지킨다)
 - 이름은 빈 값이 아니다
@@ -118,7 +118,7 @@
 
 | 메서드 | 하는 일 | 실패 시 | 관련 FR |
 |---|---|---|---|
-| `register(...)` | 종료일 계산(기간제 `plusMonths(개월)`, 횟수제 `plusMonths(6)`) 후 ACTIVE 생성 | `MEMBERSHIP_` 계열 400 | FR-2.2 · FR-2.4 |
+| `register(...)` | 종료일 계산(기간제 `plusMonths(개월)`, 횟수제 `plusMonths(6)`) 후 ACTIVE 생성 | `MEMBERSHIP_INVALID_INPUT` 400 (D-22) | FR-2.2 · FR-2.4 |
 | `validateEntry(today)` | 날짜 · 유효 정지 구간 · 잔여를 직접 검사해 출입 가능 판정 | `ATTENDANCE_` 계열 409 | FR-3.2 · FR-4.4 |
 | `deduct(today)` | 횟수제 잔여 1 차감 + `DEDUCTED` 이력, 잔여 0 도달 시 EXPIRED 전이 | `MEMBERSHIP_` 계열 4xx | FR-3.3 |
 | `pause(startDate, days, today)` | 상한 · 겹침 · 상태 검사 후 정지 등록, 종료일 += days, `PAUSED` 이력, 시작일 = 오늘이면 PAUSED 전이 | `PAUSE_` 계열 4xx | FR-4.1~4.3 |
@@ -477,7 +477,7 @@ sequenceDiagram
 
 | 테이블 | 원문 행 수 | data.sql 행 수 | 대조 완료 |
 |---|---|---|---|
-| `branch` | (원문 표 없음) | 2 | [ ] |
+| `branch` | (원문 표 없음) | 2 | [x] |
 | `member` | (원문 표 없음) | 4 | [ ] |
 | `membership` | (원문 표 없음) | 4 | [ ] |
 
@@ -485,7 +485,7 @@ sequenceDiagram
 
 | 행 | 내용 | 쓰이는 곳 |
 |---|---|---|
-| branch 1~2 | 지점 이름만 | 헤더 식별 · 지점 격리 데모 |
+| branch 1~2 | 지점 이름만 (`강남점` · `잠실점`) | 헤더 식별 · 지점 격리 데모 |
 | member 1~4 | 이름 · 연락처만 (전사 공유, D-10) | 등록 · 출입 데모 |
 | membership 1 | 회원 1 · 지점 1 · 기간제 · ACTIVE | 출입 · 목록 데모 |
 | membership 2 | 회원 2 · 지점 1 · 횟수제(잔여 10) · ACTIVE | 차감 데모 |
