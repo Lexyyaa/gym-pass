@@ -9,7 +9,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.simple.SimpleJdbcInsert;
 
 /**
- * 출입 테스트용 데이터. 테스트 전용 지점 ID · 연락처 접두로 만들고 지운다 (seed에 기대지 않는다).
+ * 출입 · 정지 테스트용 데이터. 테스트 전용 지점 ID · 연락처 접두로 만들고 지운다 (seed에 기대지 않는다).
  * 오늘은 서버가 쓰는 Clock 빈 기준이다.
  */
 public class AttendanceFixture {
@@ -107,6 +107,49 @@ public class AttendanceFixture {
                 deducted);
     }
 
+    /** 정지 행 (API로 만들 수 없는 과거 시작 · 해제 상태 준비용). 회원권 종료일 연장은 호출 측이 맞춰 넣는다. */
+    public long insertPause(long membershipId, LocalDate startDate, LocalDate endDate, LocalDate releasedDate) {
+        Map<String, Object> row = new HashMap<>();
+        row.put("membership_id", membershipId);
+        row.put("start_date", startDate);
+        row.put("end_date", endDate);
+        row.put("released_date", releasedDate);
+        row.put("created_at", LocalDateTime.now(clock));
+        row.put("updated_at", LocalDateTime.now(clock));
+        return new SimpleJdbcInsert(jdbcTemplate)
+                .withTableName("membership_pause")
+                .usingGeneratedKeyColumns("id")
+                .executeAndReturnKey(row)
+                .longValue();
+    }
+
+    public int countPauses(long membershipId) {
+        return jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM membership_pause WHERE membership_id = ?", Integer.class, membershipId);
+    }
+
+    public int countAllPauses() {
+        return jdbcTemplate.queryForObject("SELECT COUNT(*) FROM membership_pause", Integer.class);
+    }
+
+    public LocalDate endDate(long membershipId) {
+        return jdbcTemplate.queryForObject(
+                "SELECT end_date FROM membership WHERE id = ?", LocalDate.class, membershipId);
+    }
+
+    public LocalDate releasedDate(long pauseId) {
+        return jdbcTemplate.queryForObject(
+                "SELECT released_date FROM membership_pause WHERE id = ?", LocalDate.class, pauseId);
+    }
+
+    public int countHistories(long membershipId, String eventType) {
+        return jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM membership_history WHERE membership_id = ? AND event_type = ?",
+                Integer.class,
+                membershipId,
+                eventType);
+    }
+
     public int countAttendances(long memberId) {
         return jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM attendance_record WHERE member_id = ?", Integer.class, memberId);
@@ -139,6 +182,8 @@ public class AttendanceFixture {
         String memberIds = "SELECT id FROM member WHERE phone LIKE '" + phonePrefix + "%'";
         jdbcTemplate.update("DELETE FROM attendance_record WHERE member_id IN (" + memberIds + ")");
         jdbcTemplate.update("DELETE FROM membership_history WHERE member_id IN (" + memberIds + ")");
+        jdbcTemplate.update("DELETE FROM membership_pause WHERE membership_id IN"
+                + " (SELECT id FROM membership WHERE member_id IN (" + memberIds + "))");
         jdbcTemplate.update("DELETE FROM membership WHERE member_id IN (" + memberIds + ")");
         jdbcTemplate.update("DELETE FROM member WHERE phone LIKE ?", phonePrefix + "%");
         for (long branchId : branchIds) {
