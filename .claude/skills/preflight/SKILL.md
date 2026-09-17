@@ -19,7 +19,7 @@ disable-model-invocation: true
 | 1 | JDK 21 | `/usr/libexec/java_home -v 21` (macOS) 또는 `./gradlew -q javaToolchains` | 21 존재 |
 | 2 | Gradle | `./gradlew --version` | 정상 출력 |
 | 3 | Docker | `docker info` | 데몬 응답 |
-| 4 | 포트 | `lsof -i :3310 -i :8080` | 비어 있음 (`app-mysql`이 3310을 쓰는 것은 정상) |
+| 4 | 포트 | `lsof -i :3309 -i :8080` | 비어 있음 (`gym-mysql`이 3309를 쓰는 것은 정상) |
 | 5 | git 상태 | `git status -sb`, `git fetch` | `main`, 변경 없음, 원격과 같음 |
 | 6 | 원격 · gh | `git remote -v`, `gh auth status`, `gh repo view --json name,viewerPermission` | 로그인됨, 쓰기 권한 |
 | 6-1 | curl · jq | `curl --version`, `jq --version` | 둘 다 있음 (실측에 필요) |

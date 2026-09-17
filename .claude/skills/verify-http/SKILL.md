@@ -66,7 +66,7 @@ POST {{host}}/orders/{{orderId}}/cancel
      - 이전 실행의 데이터(멱등 키 · UNIQUE 값)가 남으면 거짓 불일치가 난다
      - `ddl-auto: update`가 반영 못 하는 제약 변경도 이렇게 반영된다
    - 아래 명령이 성공할 때까지 대기한다
-     - `docker exec app-mysql mysql -uapp -papp app -e "SELECT 1"`
+     - `docker exec gym-mysql mysql -ugym -pgym gym -e "SELECT 1"`
      - `mysqladmin ping`은 초기화 중인 임시 서버에도 응답하므로 쓰지 않는다
    - 8080이 비어 있는지 확인한다: `lsof -i :8080`
      - 남아 있으면 `lsof -ti :8080 | xargs kill` 후 다시 확인
@@ -81,7 +81,7 @@ POST {{host}}/orders/{{orderId}}/cancel
    - 상태코드
    - `$.필드` (jq 또는 응답 파싱)
    - `@db` 쿼리
-     - `docker exec -e MYSQL_PWD=app app-mysql mysql -uapp app -N -e "..."`
+     - `docker exec -e MYSQL_PWD=gym gym-mysql mysql -ugym gym -N -e "..."`
      - `-p암호`를 쓰면 경고가 출력에 섞이므로 환경 변수로 넘긴다
    - `build/bootrun.log`에 `ERROR`가 새로 찍혔는지 확인한다
      - 4xx 기대 요청에서 ERROR가 나오면 불일치로 본다

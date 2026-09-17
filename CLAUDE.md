@@ -10,9 +10,9 @@
 ## 실행
 
 - 인프라: `docker compose up -d`
-  - `app-mysql` 컨테이너
-  - 호스트 포트 **3310**(3306 아님)
-  - `app`/`app`, DB `app`
+  - `gym-mysql` 컨테이너
+  - 호스트 포트 **3309**(3306 아님)
+  - `gym`/`gym`, DB `gym`
 - 초기화: `docker compose down -v`
   - seed나 컬럼 제약을 바꿨으면 필수
   - `ddl-auto: update`는 기존 컬럼을 고치지 못한다
