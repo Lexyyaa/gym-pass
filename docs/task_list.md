@@ -6,7 +6,7 @@
 > - API: [04](design/04-api-spec.md)
 >
 
-**현재:** F1 / T1-1
+**현재:** F1 / T1-2
 
 ## 규칙
 
@@ -61,7 +61,7 @@
 
 ## F1. 기초 설정 `feature/setup`
 
-- [ ] T1-1 `feat: 공통 값 객체 및 enum 구현` — 03 §1 · NFR-1 · NFR-9
+- [x] T1-1 `feat: 공통 값 객체 및 enum 구현` — 03 §1 · NFR-1 · NFR-9
 - [ ] T1-2 `feat: 도메인 에러 코드 추가` — 04 §4 · NFR-8
 - [ ] T1-3 `feat: Branch 엔티티 및 지점 seed 구현` — 03 §9 branch 행 대조 완료 체크
 - [ ] T1-4 `test: 값 객체 및 지점 헤더 검증 케이스` — TC-1-01 · TC-1-02 · TC-1-03 · TC-1-04
