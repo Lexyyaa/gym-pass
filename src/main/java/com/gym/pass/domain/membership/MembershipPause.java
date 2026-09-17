@@ -99,8 +99,20 @@ public class MembershipPause extends BaseTimeEntity {
 
     /** 오늘 해제한다. 미사용 일수(예정 − 사용)를 돌려준다. 가능 여부는 Membership이 먼저 확인한다. */
     int release(LocalDate today) {
+        int unusedDays = unusedDaysIfReleasedOn(today);
         this.releasedDate = today;
-        return plannedDays() - usedDays();
+        return unusedDays;
+    }
+
+    /** 오늘 해제한다면 되돌릴 미사용 일수. 상태를 바꾸지 않는다. 시작 전 해제면 예정 일수 전부다 (D-8). */
+    int unusedDaysIfReleasedOn(LocalDate today) {
+        int usedDays = today.isBefore(startDate) ? 0 : daysBetweenInclusive(startDate, today);
+        return plannedDays() - usedDays;
+    }
+
+    /** 미해제 정지이면서 date보다 늦게 시작하는지 (C-40 → D-29 보충). */
+    boolean isUnreleasedStartingAfter(LocalDate date) {
+        return !isReleased() && startDate.isAfter(date);
     }
 
     private LocalDate effectiveEndDate() {

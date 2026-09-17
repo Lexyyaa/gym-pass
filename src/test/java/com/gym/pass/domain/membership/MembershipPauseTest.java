@@ -474,7 +474,7 @@ class MembershipPauseTest {
 
     @ParameterizedTest(name = "시작일 {0}")
     @ValueSource(strings = {"+10000-01-01", "+999999999-12-31"})
-    @DisplayName("정지 시작일이 9999-12-31을 넘으면 날짜 계산 전에 MEMBERSHIP_INVALID_INPUT이고 아무것도 바뀌지 않는다")
+    @DisplayName("[TC-4-09] 정지 시작일이 9999-12-31을 넘으면 날짜 계산 전에 MEMBERSHIP_INVALID_INPUT이고 아무것도 바뀌지 않는다")
     void startDateBeyondMax(String startDate) {
         // given
         Membership membership = period(3);
@@ -573,6 +573,90 @@ class MembershipPauseTest {
                 ErrorCode.PAUSE_OUT_OF_PERIOD);
         assertThat(membership.getPauses()).hasSize(2);
         assertThat(membership.getEndDate()).isEqualTo(latestEndDate);
+    }
+
+    @Test
+    @DisplayName("[TC-4-20] 앞선 정지를 해제하면 뒤의 미해제 정지가 새 종료일 밖에 남는 경우 PAUSE_NOT_RELEASABLE이고 아무것도 바뀌지 않는다")
+    void releaseLeavingPauseOutOfPeriod() {
+        // given — A(TODAY+1, 3일)로 종료일 +3, 늘어난 종료일에 B(1일) 시작
+        Membership membership = period(1);
+        LocalDate originalEndDate = membership.getEndDate();
+        MembershipPause first = membership.pause(TODAY.plusDays(1), 3, TODAY, false, PAUSE_LIMITS);
+        assignId(first, 1L);
+        MembershipPause second = membership.pause(originalEndDate.plusDays(3), 1, TODAY, false, PAUSE_LIMITS);
+        assignId(second, 2L);
+        LocalDate endDate = membership.getEndDate();
+        int histories = membership.getHistories().size();
+
+        // when / then
+        assertMembershipError(() -> membership.releasePause(1L, TODAY), ErrorCode.PAUSE_NOT_RELEASABLE);
+        assertThat(first.getReleasedDate()).isNull();
+        assertThat(second.getReleasedDate()).isNull();
+        assertThat(membership.getEndDate()).isEqualTo(endDate);
+        assertThat(membership.getHistories()).hasSize(histories);
+    }
+
+    @Test
+    @DisplayName("[TC-4-20] 뒤의 정지를 먼저 해제하면 앞선 정지도 해제되고 종료일이 원래 값으로 돌아온다")
+    void releaseLaterPauseFirst() {
+        // given
+        Membership membership = period(1);
+        LocalDate originalEndDate = membership.getEndDate();
+        assignId(membership.pause(TODAY.plusDays(1), 3, TODAY, false, PAUSE_LIMITS), 1L);
+        assignId(membership.pause(originalEndDate.plusDays(3), 1, TODAY, false, PAUSE_LIMITS), 2L);
+
+        // when
+        membership.releasePause(2L, TODAY);
+        membership.releasePause(1L, TODAY);
+
+        // then
+        assertThat(membership.getEndDate()).isEqualTo(originalEndDate);
+        assertThat(membership.getPauses())
+                .allSatisfy(pause -> assertThat(pause.getReleasedDate()).isEqualTo(TODAY));
+    }
+
+    @Test
+    @DisplayName("[TC-4-20] 해제 후 새 종료일에 시작하는 미해제 정지는 기간 안이라 해제되고, 하루 늦으면 거부된다 (경계)")
+    void releaseBoundaryOnNewEndDate() {
+        // given — A(TODAY+1, 3일) 해제 후 종료일 = originalEndDate + 1(B 1일분)
+        Membership inside = period(1);
+        LocalDate originalEndDate = inside.getEndDate();
+        assignId(inside.pause(TODAY.plusDays(1), 3, TODAY, false, PAUSE_LIMITS), 1L);
+        assignId(inside.pause(originalEndDate.plusDays(1), 1, TODAY, false, PAUSE_LIMITS), 2L);
+        Membership outside = period(1);
+        assignId(outside.pause(TODAY.plusDays(1), 3, TODAY, false, PAUSE_LIMITS), 1L);
+        assignId(outside.pause(originalEndDate.plusDays(2), 1, TODAY, false, PAUSE_LIMITS), 2L);
+        LocalDate outsideEndDate = outside.getEndDate();
+
+        // when
+        inside.releasePause(1L, TODAY);
+
+        // then
+        assertThat(inside.getEndDate()).isEqualTo(originalEndDate.plusDays(1));
+        assertMembershipError(() -> outside.releasePause(1L, TODAY), ErrorCode.PAUSE_NOT_RELEASABLE);
+        assertThat(outside.getEndDate()).isEqualTo(outsideEndDate);
+    }
+
+    @Test
+    @DisplayName("[TC-4-20] 진행 중 정지를 해제하면 사용 일수를 뺀 새 종료일 기준으로 판단한다")
+    void releaseOngoingUsesUsedDays() {
+        // given — A(TODAY, 3일) 뒤 B(원래 종료일 + 3, 1일). 종료일 = 원래 + 4
+        Membership allowed = period(1);
+        LocalDate originalEndDate = allowed.getEndDate();
+        assignId(allowed.pause(TODAY, 3, TODAY, false, PAUSE_LIMITS), 1L);
+        assignId(allowed.pause(originalEndDate.plusDays(3), 1, TODAY, false, PAUSE_LIMITS), 2L);
+        Membership rejected = period(1);
+        assignId(rejected.pause(TODAY, 3, TODAY, false, PAUSE_LIMITS), 1L);
+        assignId(rejected.pause(originalEndDate.plusDays(3), 1, TODAY, false, PAUSE_LIMITS), 2L);
+        LocalDate rejectedEndDate = rejected.getEndDate();
+
+        // when — TODAY+1 해제: 2일 사용 · 1일 되돌림 → 새 종료일 = 원래 + 3 (B 시작일과 같음)
+        allowed.releasePause(1L, TODAY.plusDays(1));
+
+        // then — TODAY 해제: 1일 사용 · 2일 되돌림 → 새 종료일 = 원래 + 2 (B 시작일보다 이름)
+        assertThat(allowed.getEndDate()).isEqualTo(originalEndDate.plusDays(3));
+        assertMembershipError(() -> rejected.releasePause(1L, TODAY), ErrorCode.PAUSE_NOT_RELEASABLE);
+        assertThat(rejected.getEndDate()).isEqualTo(rejectedEndDate);
     }
 
     private static Membership periodFrom(LocalDate startDate, int months) {
