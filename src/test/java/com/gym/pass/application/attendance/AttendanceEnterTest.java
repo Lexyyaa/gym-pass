@@ -103,8 +103,8 @@ class AttendanceEnterTest {
     }
 
     @Test
-    @DisplayName("[TC-3-06] 잔여 1회로 출입하면 허용되고 잔여 0 · EXPIRED가 되며, 같은 날 재출입은 거부된다")
-    void lastCountThenReEntry() {
+    @DisplayName("[TC-3-06] 잔여 1회로 출입하면 잔여 0 · ACTIVE 유지이고, 같은 날 재출입은 차감 없이 허용된다")
+    void lastCountThenSameDayReEntry() {
         // given
         long memberId = fixture.createMember(4);
         LocalDate today = fixture.today();
@@ -116,18 +116,45 @@ class AttendanceEnterTest {
         // then
         assertThat(first.membershipId()).isEqualTo(membershipId);
         assertThat(fixture.remainingCount(membershipId)).isZero();
-        assertThat(fixture.status(membershipId)).isEqualTo("EXPIRED");
+        assertThat(fixture.status(membershipId)).isEqualTo("ACTIVE");
         assertThat(fixture.countDeductedAttendances(membershipId)).isEqualTo(1);
         assertThat(fixture.countDeductedHistories(membershipId)).isEqualTo(1);
+
+        // when
+        AttendanceInfo.Entered second = attendanceApplicationService.enter(command(memberId));
+
+        // then
+        assertThat(second.membershipId()).isEqualTo(membershipId);
+        assertThat(second.attendedAt().toLocalDate()).isEqualTo(today);
+        assertThat(fixture.countAttendances(memberId)).isEqualTo(2);
+        assertThat(fixture.countDeductedAttendances(membershipId)).isEqualTo(1);
+        assertThat(fixture.remainingCount(membershipId)).isZero();
+        assertThat(fixture.status(membershipId)).isEqualTo("ACTIVE");
+        assertThat(fixture.countDeductedHistories(membershipId)).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("[TC-3-06] 전날 마지막 1회를 차감해 잔여 0 · ACTIVE로 남은 회원권은 다음 날 배치 전이어도 거부되고 기록이 없다")
+    void lastCountDeductedYesterdayThenNextDay() {
+        // given — 전날 잔여 1→0 차감 출입을 마친 상태 (상태 동기화 배치는 돌지 않았다)
+        long memberId = fixture.createMember(8);
+        LocalDate today = fixture.today();
+        LocalDate yesterday = today.minusDays(1);
+        long membershipId =
+                fixture.insertCountMembership(memberId, BRANCH_ID, "ACTIVE", yesterday, yesterday.plusMonths(6), 0);
+        fixture.insertAttendance(memberId, membershipId, BRANCH_ID, yesterday.atTime(23, 59, 59), true);
+        fixture.insertAttendance(memberId, membershipId, BRANCH_ID, yesterday.atTime(23, 59, 59), false);
 
         // when / then
         assertThatThrownBy(() -> attendanceApplicationService.enter(command(memberId)))
                 .isInstanceOf(AttendanceException.class)
                 .extracting("errorCode")
                 .isEqualTo(ErrorCode.ATTENDANCE_NO_VALID_MEMBERSHIP);
-        assertThat(fixture.countAttendances(memberId)).isEqualTo(1);
+        assertThat(fixture.countAttendances(memberId)).isEqualTo(2);
+        assertThat(fixture.countDeductedAttendances(membershipId)).isEqualTo(1);
         assertThat(fixture.remainingCount(membershipId)).isZero();
-        assertThat(fixture.countDeductedHistories(membershipId)).isEqualTo(1);
+        assertThat(fixture.status(membershipId)).isEqualTo("ACTIVE");
+        assertThat(fixture.countDeductedHistories(membershipId)).isZero();
     }
 
     @Test

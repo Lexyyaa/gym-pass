@@ -2,8 +2,6 @@ package com.gym.pass.application.attendance;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.gym.pass.domain.attendance.exception.AttendanceException;
-import com.gym.pass.domain.exception.ErrorCode;
 import com.gym.pass.support.ConcurrencyRunner;
 import com.gym.pass.support.IntegrationTest;
 import com.gym.pass.support.fixture.AttendanceFixture;
@@ -75,7 +73,7 @@ class AttendanceEnterConcurrencyTest {
     }
 
     @Test
-    @DisplayName("[TC-3-07] 잔여 1회에서 동시 출입하면 1건만 성공하고 잔여는 0 · 차감 1회로 음수가 되지 않는다")
+    @DisplayName("[TC-3-07] 잔여 1회에서 동시 출입하면 전부 성공하고 차감은 정확히 1회 · 잔여 0 · 상태 ACTIVE 유지다")
     void concurrentEntryLastCount() throws InterruptedException {
         // given
         long memberId = fixture.createMember(2);
@@ -87,16 +85,13 @@ class AttendanceEnterConcurrencyTest {
                 THREADS, index -> attendanceApplicationService.enter(new AttendanceCommand.Enter(memberId, BRANCH_ID)));
 
         // then
-        assertThat(ConcurrencyRunner.successCount(results)).isEqualTo(1);
-        assertThat(ConcurrencyRunner.errors(results))
-                .hasSize(THREADS - 1)
-                .allSatisfy(error -> assertThat(error)
-                        .isInstanceOf(AttendanceException.class)
-                        .extracting("errorCode")
-                        .isEqualTo(ErrorCode.ATTENDANCE_NO_VALID_MEMBERSHIP));
+        assertThat(ConcurrencyRunner.errors(results)).isEmpty();
+        assertThat(ConcurrencyRunner.successCount(results)).isEqualTo(THREADS);
+        assertThat(results).extracting(result -> result.value().membershipId()).containsOnly(membershipId);
         assertThat(fixture.remainingCount(membershipId)).isZero();
-        assertThat(fixture.status(membershipId)).isEqualTo("EXPIRED");
-        assertThat(fixture.countAttendances(memberId)).isEqualTo(1);
+        assertThat(fixture.status(membershipId)).isEqualTo("ACTIVE");
+        assertThat(fixture.countAttendances(memberId)).isEqualTo(THREADS);
+        assertThat(fixture.countDeductedAttendances(membershipId)).isEqualTo(1);
         assertThat(fixture.countDeductedHistories(membershipId)).isEqualTo(1);
     }
 }

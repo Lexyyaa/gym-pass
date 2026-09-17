@@ -25,10 +25,10 @@ class MembershipEntryTest {
         Membership membership = period();
 
         // when / then
-        membership.validateEntry(START);
-        membership.validateEntry(END);
-        assertNoValidMembership(() -> membership.validateEntry(START.minusDays(1)));
-        assertNoValidMembership(() -> membership.validateEntry(END.plusDays(1)));
+        membership.validateEntry(START, false);
+        membership.validateEntry(END, false);
+        assertNoValidMembership(() -> membership.validateEntry(START.minusDays(1), false));
+        assertNoValidMembership(() -> membership.validateEntry(END.plusDays(1), false));
     }
 
     @Test
@@ -72,8 +72,8 @@ class MembershipEntryTest {
     }
 
     @Test
-    @DisplayName("[TC-3-06] 잔여 1회를 차감하면 잔여 0 · EXPIRED가 되고, 이후 판정 · 차감은 거부된다")
-    void lastCountExpires() {
+    @DisplayName("[TC-3-06] 잔여 1회를 차감하면 잔여 0이 되고 상태는 ACTIVE로 남는다")
+    void lastCountKeepsStatus() {
         // given
         Membership membership = count(1);
 
@@ -83,11 +83,51 @@ class MembershipEntryTest {
         // then
         assertThat(deducted).isTrue();
         assertThat(membership.getRemainingCount()).isZero();
-        assertThat(membership.getStatus()).isEqualTo(MembershipStatus.EXPIRED);
-        assertNoValidMembership(() -> membership.validateEntry(START));
+        assertThat(membership.getStatus()).isEqualTo(MembershipStatus.ACTIVE);
+        assertThat(membership.getHistories()).hasSize(2).last().satisfies(history -> {
+            assertThat(history.getEventType()).isEqualTo(MembershipEventType.DEDUCTED);
+            assertThat(history.getRemainingCountBefore()).isEqualTo(1);
+            assertThat(history.getRemainingCountAfter()).isZero();
+        });
+    }
+
+    @Test
+    @DisplayName("[TC-3-06] 잔여 0이면 오늘 차감 기록이 있을 때만 출입이 허용되고, 다음 날(오늘 차감 없음)은 거부된다")
+    void zeroRemainingEntryDependsOnDeductedToday() {
+        // given
+        Membership membership = count(1);
+        membership.deduct(START);
+
+        // when / then
+        membership.validateEntry(START, true);
+        assertNoValidMembership(() -> membership.validateEntry(START, false));
+        assertNoValidMembership(() -> membership.validateEntry(START.plusDays(1), false));
+        assertThat(membership.getStatus()).isEqualTo(MembershipStatus.ACTIVE);
+    }
+
+    @Test
+    @DisplayName("[TC-3-06] 잔여 0에서는 차감이 거부되고 잔여 · 이력이 바뀌지 않는다")
+    void zeroRemainingDeductRejected() {
+        // given
+        Membership membership = count(1);
+        membership.deduct(START);
+
+        // when / then
         assertNoValidMembership(() -> membership.deduct(START));
         assertThat(membership.getRemainingCount()).isZero();
         assertThat(membership.getHistories()).hasSize(2);
+    }
+
+    @Test
+    @DisplayName("오늘 차감 기록이 있어도 기간 밖이면 거부된다")
+    void deductedTodayDoesNotBypassPeriod() {
+        // given
+        Membership membership = count(1);
+
+        // when / then
+        assertNoValidMembership(() -> membership.validateEntry(START.minusDays(1), true));
+        assertNoValidMembership(
+                () -> membership.validateEntry(membership.getEndDate().plusDays(1), true));
     }
 
     @Test

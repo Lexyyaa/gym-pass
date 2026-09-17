@@ -12,7 +12,8 @@ import org.springframework.stereotype.Component;
 
 /**
  * 출입 도메인 서비스 (FR-3.1 ~ FR-3.4 · NFR-2 · NFR-4 · 03 §5 · §7 · §8).
- * member 행 락 → 후보 조회 → membership 행 락 → 유효 검사 → 오늘 첫 출입이면 차감 → 기록 (D-26).
+ * member 행 락 → 후보 조회 → membership 행 락 → 오늘 차감 여부 조회 → 유효 검사 → 오늘 첫 출입이면 차감 → 기록
+ * (D-26 · D-27).
  * 호출 측 트랜잭션 안에서 실행돼야 한다.
  */
 @Component
@@ -37,12 +38,12 @@ public class AttendanceService {
             throw noValidMembership();
         }
         membership.verifyBranch(branchId);
-        membership.validateEntry(today);
+        // D-27: 오늘 차감 여부는 membership 락 이후에 읽어야 동시 요청 사이에서 확정된 값이다
+        boolean deductedToday = attendanceRecordRepository.existsDeductedOn(membership.getId(), today);
+        membership.validateEntry(today, deductedToday);
 
-        boolean deducted = false;
-        if (!attendanceRecordRepository.existsDeductedOn(membership.getId(), today)) {
-            deducted = membership.deduct(today);
-        }
+        // 오늘 이미 차감됐으면 차감 없이 기록만 남긴다 (D-11). 아니면 위 판정이 잔여 ≥ 1을 보장한다
+        boolean deducted = !deductedToday && membership.deduct(today);
         return attendanceRecordRepository.save(
                 AttendanceRecord.record(memberId, membership.getId(), membership.getBranchId(), serverNow, deducted));
     }
