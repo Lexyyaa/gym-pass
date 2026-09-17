@@ -169,16 +169,18 @@
 
 ### API-2. 회원권 등록 · `POST /api/memberships`
 
-- 관련: FR-2.2 · FR-2.3 · FR-2.4 / TC-2-02 ~ TC-2-11 · TC-2-13 ~ TC-2-16
+- 관련: FR-2.2 · FR-2.3 · FR-2.4 / TC-2-02 ~ TC-2-11 · TC-2-13 ~ TC-2-18
 - 회원권은 헤더 지점 소속으로 생성된다
 - 종료일 계산: 기간제 = 시작일 + 개월 (D-6), 횟수제 = 시작일 + 6개월 (D-7)
 - 개월 수를 저장한다: 기간제 = `months`, 횟수제 = 6 (D-24, 응답 필드는 없음)
 - 입력 규칙 (D-22 · D-23) — 위반은 `MEMBERSHIP_INVALID_INPUT` 400
   - `type`별 필수 값: 기간제 `months` · 횟수제 `count`
   - 반대 종류 값 금지: 기간제에 `count` · 횟수제에 `months`
-  - 상한: `months` ≤ 120 · `count` ≤ 1000
+    - 예외: 반대 종류 값이 0 · 음수면 `@Positive`가 먼저 막아 `COMMON_INVALID_INPUT`이다
+  - 상한: `months` ≤ 120 · `count` ≤ 1000 (`application.yml` 정책 값, C-34)
+  - 하한: `startDate` ≥ 1000-01-01 (C-33, TC-2-17)
   - 계산된 종료일 ≤ 9999-12-31
-- 등록 거부 검사는 회원 기준 전 지점을 본다 (D-15 · D-19, C-22)
+- 등록 거부 검사는 회원 기준 전 지점을 본다 (D-15 · D-19, C-22, TC-2-18)
   - 거부 조건 = 상태 `ACTIVE` · `PAUSED` **그리고** 종료일 ≥ 오늘인 회원권 존재
   - 정지 중(`PAUSED`) 회원도 거부된다 (TC-2-09)
   - 시작일이 미래인 회원권이 있어도 거부된다 (TC-2-11)
@@ -192,7 +194,7 @@
 |---|---|---|---|---|
 | `memberId` | Long | O | `@NotNull`, `@Positive` | 대상 회원 |
 | `type` | String | O | `@NotNull`, `PERIOD` 또는 `COUNT` | 회원권 종류 |
-| `startDate` | String | O | `@NotNull`, `yyyy-MM-dd` | 시작일 (값 제한 없음, 종료일 범위는 D-23) |
+| `startDate` | String | O | `@NotNull`, 1000-01-01 ~ (도메인 검증, D-23) | 시작일 (`yyyy-MM-dd`) |
 | `months` | Integer | △ | `@Positive`, 도메인 검증 (D-22 · D-23), 상한 120 | 기간(개월), `type=PERIOD`에서만 |
 | `count` | Integer | △ | `@Positive`, 도메인 검증 (D-22 · D-23), 상한 1000 | 이용 횟수, `type=COUNT`에서만 |
 | `paymentAmount` | Long | O | `@NotNull`, `@PositiveOrZero` | 결제 금액 (저장만) |
@@ -233,15 +235,18 @@
 
 | 상태 | errorCode | 조건 |
 |---|---|---|
-| 400 | `MEMBERSHIP_INVALID_INPUT` | 도메인 등록 검증 실패 (D-22 · D-23, TC-2-13 ~ TC-2-16) |
+| 400 | `MEMBERSHIP_INVALID_INPUT` | 도메인 등록 검증 실패 (D-22 · D-23, TC-2-13 ~ TC-2-17) |
 | 404 | `MEMBER_NOT_FOUND` | 회원 없음 (TC-2-08) |
-| 409 | `MEMBERSHIP_ALREADY_ACTIVE` | 종료일 ≥ 오늘인 `ACTIVE` · `PAUSED` 회원권 보유 (TC-2-05 · TC-2-06 · TC-2-09 · TC-2-11) |
+| 409 | `MEMBERSHIP_ALREADY_ACTIVE` | 종료일 ≥ 오늘인 `ACTIVE` · `PAUSED` 회원권 보유 (TC-2-05 · TC-2-06 · TC-2-09 · TC-2-11 · TC-2-18) |
 
 - `MEMBERSHIP_INVALID_INPUT` 조건
   - `type`별 필수 값 누락 (TC-2-13)
   - 반대 종류 값 (TC-2-16)
+    - 0 · 음수면 Request 검증이 먼저 막아 `COMMON_INVALID_INPUT`이다
   - 상한 초과 (TC-2-14)
+  - 시작일 하한 미만 — `startDate` < 1000-01-01 (TC-2-17)
   - 종료일 범위 초과 (TC-2-15)
+- `MEMBERSHIP_ALREADY_ACTIVE`는 다른 지점의 유효 회원권에도 난다 (D-15 전 지점 검사, TC-2-18)
 
 ### API-3. 출입 기록 · `POST /api/attendances`
 
@@ -313,7 +318,7 @@
 
 | 필드 | 타입 | 필수 | 검증 | 설명 |
 |---|---|---|---|---|
-| `startDate` | String | O | `@NotNull`, `yyyy-MM-dd`, 오늘 이후 (서비스 검증) | 정지 시작일 (예약 가능) |
+| `startDate` | String | O | `@NotNull`, `yyyy-MM-dd`, 오늘 이후 — 도메인 검증 (03 §3.3 불변식) | 정지 시작일 (예약 가능) |
 | `days` | Integer | O | `@NotNull`, `@Positive` | 정지 일수 |
 
 ```json
@@ -657,8 +662,12 @@
 
 - `type`별 필수 값 누락 — 기간제 개월 · 횟수제 횟수 (TC-2-13)
 - 반대 종류 값 — 기간제에 횟수 · 횟수제에 개월 (TC-2-16)
+  - 예외: 반대 종류 값이 0 · 음수면 Request의 `@Positive`가 먼저 막아 `COMMON_INVALID_INPUT`이다
 - 상한 초과 — 개월 > 120 · 횟수 > 1000 (TC-2-14)
+  - 상한 수치는 `application.yml` 정책 값이다 (C-34)
+- 시작일 하한 미만 — 시작일 < 1000-01-01 (TC-2-17, C-33)
 - 종료일 범위 초과 — 계산된 종료일 > 9999-12-31 (TC-2-15)
+- memberId · branchId · startDate · price의 null · 음수, 모르는 type은 도메인 최후 방어선이다 — API로는 Request 검증(`COMMON_INVALID_INPUT`)이 먼저 막는다
 
 ### 정지
 

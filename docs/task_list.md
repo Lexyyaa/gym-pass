@@ -74,7 +74,7 @@
 
 - [x] T2-1 `feat: Member·Membership 애그리거트·종료일 계산 및 seed 구현` — FR-2.1 · FR-2.2 · FR-2.4 · FR-5.5 · 03 §9 member·membership 행 대조 완료 체크
 - [x] T2-2 `feat: 회원·회원권 등록 API 구현` — FR-2.3 · API-1 · API-2
-- [x] T2-3 `test: 등록 성공·실패 케이스` — TC-2-01 · TC-2-02 · TC-2-05 · TC-2-07 · TC-2-08 · TC-2-09 · TC-2-11 · TC-2-12 · TC-2-13 · TC-2-14 · TC-2-15 · TC-2-16
+- [x] T2-3 `test: 등록 성공·실패 케이스` — TC-2-01 · TC-2-02 · TC-2-05 · TC-2-07 · TC-2-08 · TC-2-09 · TC-2-11 · TC-2-12 · TC-2-13 · TC-2-14 · TC-2-15 · TC-2-16 · TC-2-17 · TC-2-18
 - [x] T2-4 `test: 종료일 계산·재등록 경계 엣지 케이스` — TC-2-03 · TC-2-04 · TC-2-10
 - [x] T2-5 `test: 동시 등록 방어` — TC-2-06 · NFR-3
 - [ ] T2-6 `test: F2 .http 실행 케이스`
@@ -82,7 +82,8 @@
 
 - T2-1의 FR-5.5는 `MembershipHistory` 엔티티와 `REGISTERED` 이력까지다 (03 §3.3)
 - T2-1은 member · membership seed를 함께 넣는다 (branch seed는 T1-3)
-- TC-2-14~16은 F2 리뷰 수정(fix 커밋)에서 구현
+- TC-2-14~17은 F2 리뷰 수정(fix 커밋)에서 구현
+- TC-2-18은 기존 테스트에 DisplayName을 붙여 연결한다
 - T2-3은 주입 MockMvc로 API-1 · API-2의 헤더 누락 400 · 없는 지점 404를 한 번 더 확인한다 (F1 리뷰 — `WebConfig` 등록 검증)
 
 ## F3. 출입 `feature/attendance` — FR-3.1 ~ FR-3.4

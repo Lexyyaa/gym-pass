@@ -134,9 +134,12 @@
   - `type`별 필수 값 누락 (기간제 개월 · 횟수제 횟수)
   - 반대 종류 값 (기간제에 횟수 · 횟수제에 개월)
   - 개월 > 120 · 횟수 > 1000
+    - 상한 수치는 `application.yml` 정책 값 — 서비스가 읽어 `register(...)`에 넘긴다 (C-34)
+  - 시작일 < 1000-01-01 (C-33)
   - 계산된 종료일 > 9999-12-31
 
 **불변식** (서비스의 if문이 아니라 이 애그리거트가 스스로 지킨다)
+- `startDate ≥ 1000-01-01` (D-23, MySQL DATE 보장 범위)
 - `endDate ≥ startDate`
 - `endDate ≤ 9999-12-31` (D-23)
 - 기간(개월)은 1 ~ 120, 횟수는 1 ~ 1000, `price ≥ 0` (FR-2.2 상세 정책 · D-23)
@@ -292,6 +295,7 @@ stateDiagram-v2
 - 횟수제 유효기간 6개월은 `MembershipType`의 enum 상수다 (D-7 보충, C-32)
   - `src/main/CLAUDE.md`의 "정책 값은 설정으로" 규칙의 예외다
   - 종류의 정의이고, `months` 컬럼(D-24)에 저장되므로 값이 바뀌어도 기존 회원권에 영향이 없다
+- 입력 상한 120 · 1000은 예외가 아니라 설정값이다 (`application.yml` 정책 값, C-34 → D-23)
 
 **`MembershipStatusSyncBatch` 단계** (D-21, 매일 00:00 KST)
 
@@ -366,8 +370,8 @@ erDiagram
     MEMBERSHIP_HISTORY {
         bigint id PK
         bigint membership_id FK "물리 FK"
-        bigint member_id "논리 참조"
-        bigint branch_id "논리 참조"
+        bigint member_id FK "논리 참조"
+        bigint branch_id FK "논리 참조"
         varchar event_type
         date end_date_before
         date end_date_after
