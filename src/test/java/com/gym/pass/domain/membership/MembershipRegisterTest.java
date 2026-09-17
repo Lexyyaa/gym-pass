@@ -194,6 +194,35 @@ class MembershipRegisterTest {
         assertThat(membership.getEndDate()).isEqualTo(LocalDate.of(9999, 12, 31));
     }
 
+    @ParameterizedTest(name = "시작일 {0}")
+    @CsvSource({"0999-12-31", "-0001-01-01", "0001-01-01"})
+    @DisplayName("[TC-2-17] 시작일이 1000-01-01보다 이르면 MEMBERSHIP_INVALID_INPUT 예외가 발생한다")
+    void startDateBeforeMin(String startDate) {
+        // given
+        LocalDate parsed = LocalDate.parse(startDate);
+        MembershipRegistration period = period(parsed, 1);
+        MembershipRegistration countType = count(parsed, 1);
+
+        // when
+        // then
+        assertInvalidInput(period);
+        assertInvalidInput(countType);
+    }
+
+    @Test
+    @DisplayName("[TC-2-17] 시작일이 정확히 1000-01-01이면 등록된다 (경계)")
+    void startDateAtMin() {
+        // given
+        MembershipRegistration registration = period(LocalDate.of(1000, 1, 1), 1);
+
+        // when
+        Membership membership = Membership.register(registration);
+
+        // then
+        assertThat(membership.getStartDate()).isEqualTo(LocalDate.of(1000, 1, 1));
+        assertThat(membership.getEndDate()).isEqualTo(LocalDate.of(1000, 2, 1));
+    }
+
     @Test
     @DisplayName("[TC-2-16] 기간제에 count, 횟수제에 months가 오면 MEMBERSHIP_INVALID_INPUT 예외가 발생한다")
     void oppositeTypeValue() {

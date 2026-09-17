@@ -292,6 +292,25 @@ class MembershipRegisterApiTest {
         assertThat(fixture.countHistories(memberId)).isZero();
     }
 
+    @ParameterizedTest(name = "시작일 {0}")
+    @ValueSource(strings = {"0999-12-31", "-0001-01-01"})
+    @DisplayName("[TC-2-17] 시작일이 1000-01-01보다 이르면 400 MEMBERSHIP_INVALID_INPUT이고 저장되지 않는다")
+    void startDateBeforeMin(String startDate) throws Exception {
+        // given
+        long memberId = fixture.createMember(14);
+        Map<String, Object> body = typed(memberId, "PERIOD");
+        body.put("startDate", startDate);
+
+        // when
+        ResultActions result = register(BRANCH_ID, body);
+
+        // then
+        result.andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errorCode").value("MEMBERSHIP_INVALID_INPUT"));
+        assertThat(fixture.countMemberships(memberId)).isZero();
+        assertThat(fixture.countHistories(memberId)).isZero();
+    }
+
     static Stream<Arguments> oppositeTypeValues() {
         return Stream.of(
                 Arguments.of("PERIOD", "count", 5, "MEMBERSHIP_INVALID_INPUT"),
