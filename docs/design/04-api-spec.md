@@ -361,7 +361,7 @@
 | 404 | `MEMBERSHIP_NOT_FOUND` | 회원권 없음 (TC-4-11) |
 | 403 | `BRANCH_FORBIDDEN` | 타 지점 회원권 (TC-4-15) |
 | 400 | `PAUSE_START_DATE_PAST` | 시작일이 오늘 이전 (소급 불가, TC-4-09) |
-| 409 | `MEMBERSHIP_NOT_PAUSABLE` | 만료 · 취소된 회원권 (TC-4-05) |
+| 409 | `MEMBERSHIP_NOT_PAUSABLE` | 만료 · 취소 · 횟수제 잔여 0 회원권 (TC-4-05 · TC-4-17, D-28) |
 | 409 | `PAUSE_COUNT_LIMIT_EXCEEDED` | 시작 전 해제 건을 뺀 4번째 정지 (TC-4-04) |
 | 409 | `PAUSE_DAYS_LIMIT_EXCEEDED` | 누적 일수가 개월당 7일 초과 (TC-4-03) |
 | 409 | `PAUSE_OVERLAPPED` | 기존 정지와 기간 겹침 (TC-4-08) |
@@ -612,7 +612,7 @@
 |---|---|---|
 | 404 | `MEMBERSHIP_NOT_FOUND` | 회원권 없음 |
 | 403 | `BRANCH_FORBIDDEN` | 타 지점 회원권 |
-| 409 | `MEMBERSHIP_NOT_CANCELABLE` | 만료 · 이미 취소된 회원권 (TC-7-04) |
+| 409 | `MEMBERSHIP_NOT_CANCELABLE` | 만료 · 이미 취소 · 횟수제 잔여 0 회원권 (TC-7-04, D-28) |
 
 ---
 
@@ -663,8 +663,8 @@
 | `MEMBERSHIP_INVALID_INPUT` | 400 | 회원권 정보가 올바르지 않습니다. | 도메인 등록 검증 실패 (D-22 · D-23, 아래) | `MembershipException` | API-2 |
 | `MEMBERSHIP_NOT_FOUND` | 404 | 회원권을 찾을 수 없습니다. | 회원권 ID가 DB에 없음 | `MembershipException` | API-4 · 5 · 11 |
 | `MEMBERSHIP_ALREADY_ACTIVE` | 409 | 이미 유효한 회원권이 있습니다. | 종료일 ≥ 오늘인 `ACTIVE` · `PAUSED` 회원권 보유 회원의 신규 등록 (D-15 · D-19) | `MembershipException` | API-2 |
-| `MEMBERSHIP_NOT_PAUSABLE` | 409 | 정지할 수 없는 회원권입니다. | 만료(종료일 < 오늘 포함) · 취소된 회원권 정지 요청 | `MembershipException` | API-4 |
-| `MEMBERSHIP_NOT_CANCELABLE` | 409 | 취소할 수 없는 회원권입니다. | 만료(종료일 < 오늘 포함) · 이미 취소된 회원권 취소 요청 (선택) | `MembershipException` | API-11 |
+| `MEMBERSHIP_NOT_PAUSABLE` | 409 | 정지할 수 없는 회원권입니다. | 만료(종료일 < 오늘 · 횟수제 잔여 0 포함, D-28) · 취소된 회원권 정지 요청 | `MembershipException` | API-4 |
+| `MEMBERSHIP_NOT_CANCELABLE` | 409 | 취소할 수 없는 회원권입니다. | 만료(종료일 < 오늘 · 횟수제 잔여 0 포함, D-28) · 이미 취소된 회원권 취소 요청 (선택) | `MembershipException` | API-11 |
 
 `MEMBERSHIP_INVALID_INPUT` 발생 조건 (D-22 · D-23)
 
