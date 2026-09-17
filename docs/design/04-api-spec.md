@@ -361,7 +361,10 @@
 | 404 | `MEMBERSHIP_NOT_FOUND` | 회원권 없음 (TC-4-11) |
 | 403 | `BRANCH_FORBIDDEN` | 타 지점 회원권 (TC-4-15) |
 | 400 | `PAUSE_START_DATE_PAST` | 시작일이 오늘 이전 (소급 불가, TC-4-09) |
+| 400 | `PAUSE_OUT_OF_PERIOD` | 시작일이 회원권 시작일 앞 · 현재 종료일 뒤 (TC-4-18, D-29) |
+| 400 | `MEMBERSHIP_INVALID_INPUT` | 시작일 > 9999-12-31 · 연장 후 날짜 범위 초과 (상시 결정 — 입력 범위) |
 | 409 | `MEMBERSHIP_NOT_PAUSABLE` | 만료 · 취소 · 횟수제 잔여 0 회원권 (TC-4-05 · TC-4-17, D-28) |
+| 409 | `PAUSE_START_DATE_USED` | 오늘 출입한 회원권의 오늘 시작 정지 (TC-4-19, D-30) |
 | 409 | `PAUSE_COUNT_LIMIT_EXCEEDED` | 시작 전 해제 건을 뺀 4번째 정지 (TC-4-04) |
 | 409 | `PAUSE_DAYS_LIMIT_EXCEEDED` | 누적 일수가 개월당 7일 초과 (TC-4-03) |
 | 409 | `PAUSE_OVERLAPPED` | 기존 정지와 기간 겹침 (TC-4-08) |
@@ -398,7 +401,7 @@
 | 404 | `MEMBERSHIP_NOT_FOUND` | 회원권 없음 |
 | 404 | `PAUSE_NOT_FOUND` | 정지 없음 · 해당 회원권의 정지가 아님 (TC-4-14) |
 | 403 | `BRANCH_FORBIDDEN` | 타 지점 회원권 (TC-4-16) |
-| 409 | `PAUSE_NOT_RELEASABLE` | 이미 해제됐거나 정지 종료일이 지남 (TC-4-10) |
+| 409 | `PAUSE_NOT_RELEASABLE` | 이미 해제됐거나 정지 종료일이 지남 · 회원권이 `EXPIRED` · `CANCELED` (TC-4-10, 03 §4) |
 
 ### API-6. 회원권 목록 조회 · `GET /api/memberships`
 
@@ -660,7 +663,7 @@
 
 | errorCode | HTTP | 메시지 | 발생 조건 | 예외 클래스 | API |
 |---|---|---|---|---|---|
-| `MEMBERSHIP_INVALID_INPUT` | 400 | 회원권 정보가 올바르지 않습니다. | 도메인 등록 검증 실패 (D-22 · D-23, 아래) | `MembershipException` | API-2 |
+| `MEMBERSHIP_INVALID_INPUT` | 400 | 회원권 정보가 올바르지 않습니다. | 도메인 등록 검증 실패 (D-22 · D-23, 아래) | `MembershipException` | API-2 · API-4 |
 | `MEMBERSHIP_NOT_FOUND` | 404 | 회원권을 찾을 수 없습니다. | 회원권 ID가 DB에 없음 | `MembershipException` | API-4 · 5 · 11 |
 | `MEMBERSHIP_ALREADY_ACTIVE` | 409 | 이미 유효한 회원권이 있습니다. | 종료일 ≥ 오늘인 `ACTIVE` · `PAUSED` 회원권 보유 회원의 신규 등록 (D-15 · D-19) | `MembershipException` | API-2 |
 | `MEMBERSHIP_NOT_PAUSABLE` | 409 | 정지할 수 없는 회원권입니다. | 만료(종료일 < 오늘 · 횟수제 잔여 0 포함, D-28) · 취소된 회원권 정지 요청 | `MembershipException` | API-4 |
@@ -683,10 +686,12 @@
 |---|---|---|---|---|---|
 | `PAUSE_NOT_FOUND` | 404 | 정지 내역을 찾을 수 없습니다. | 정지 ID 없음 · 해당 회원권의 정지가 아님 | `MembershipException` | API-5 |
 | `PAUSE_START_DATE_PAST` | 400 | 정지 시작일은 오늘 이후여야 합니다. | 시작일 < 오늘 (소급 정지) | `MembershipException` | API-4 |
+| `PAUSE_OUT_OF_PERIOD` | 400 | 정지 시작일이 회원권 기간 밖입니다. | 시작일 < 회원권 시작일 · 시작일 > 현재 종료일 (D-29) | `MembershipException` | API-4 |
+| `PAUSE_START_DATE_USED` | 409 | 오늘 이미 이용한 회원권은 내일부터 정지할 수 있습니다. | 오늘 출입 기록이 있는 회원권의 오늘 시작 정지 (D-30) | `MembershipException` | API-4 |
 | `PAUSE_COUNT_LIMIT_EXCEEDED` | 409 | 정지 가능 횟수를 초과했습니다. | 시작 전 해제 건을 뺀 4번째 정지 등록 (D-2) | `MembershipException` | API-4 |
 | `PAUSE_DAYS_LIMIT_EXCEEDED` | 409 | 정지 가능 일수를 초과했습니다. | 누적 정지 일수 > `months` × 7일 (D-2 · D-24, 해제 건은 사용 일수) | `MembershipException` | API-4 |
 | `PAUSE_OVERLAPPED` | 409 | 기존 정지와 기간이 겹칩니다. | 겹치는 기간의 정지 재등록 | `MembershipException` | API-4 |
-| `PAUSE_NOT_RELEASABLE` | 409 | 해제할 수 없는 정지입니다. | 이미 해제됐거나 종료일이 지난 정지 해제 | `MembershipException` | API-5 |
+| `PAUSE_NOT_RELEASABLE` | 409 | 해제할 수 없는 정지입니다. | 이미 해제됐거나 종료일이 지난 정지 해제 · 회원권이 `EXPIRED` · `CANCELED` | `MembershipException` | API-5 |
 
 ### 출입
 

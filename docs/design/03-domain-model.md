@@ -124,7 +124,7 @@
 | `verifyBranch(branchId)` | 판정 대상 회원권의 소속 지점과 헤더 지점 비교 | `BRANCH_FORBIDDEN` 403 | FR-3.2 · NFR-1 |
 | `validateEntry(today, deductedToday)` | 날짜 · 유효 정지 구간 · 잔여 · 오늘 차감 여부를 직접 검사해 출입 가능 판정 | `ATTENDANCE_` 계열 409 | FR-3.2 · FR-4.4 |
 | `deduct(today)` | 횟수제 잔여 1 차감 + `DEDUCTED` 이력, 잔여 0이어도 상태 유지 (D-27) | `ATTENDANCE_NO_VALID_MEMBERSHIP` 409 | FR-3.3 |
-| `pause(startDate, days, today)` | 상한 · 겹침 · 상태 검사(만료 = EXPIRED · 종료일 < 오늘 · 횟수제 잔여 0, D-28) 후 정지 등록, 종료일 += days, `PAUSED` 이력, 시작일 = 오늘이면 PAUSED 전이 | `PAUSE_` 계열 4xx | FR-4.1~4.3 |
+| `pause(startDate, days, today)` | 시작일 범위(D-29) · 오늘 출입 여부(D-30) · 상한 · 겹침 · 상태 검사(만료 = EXPIRED · 종료일 < 오늘 · 횟수제 잔여 0, D-28) 후 정지 등록, 종료일 += days, `PAUSED` 이력, 시작일 = 오늘이면 PAUSED 전이 | `PAUSE_` 계열 4xx | FR-4.1~4.3 |
 | `releasePause(pauseId, today)` | 조기 해제, 미사용 일수만큼 종료일 되돌림, `RESUMED` 이력, 상태 재판정(§4) | `PAUSE_` 계열 4xx | FR-4.2 |
 | `cancel(today)` | ACTIVE · PAUSED이고 만료 아님(D-28)일 때만 CANCELED 전이, `CANCELED` 이력 | `MEMBERSHIP_` 계열 4xx | FR-7.4 |
 
