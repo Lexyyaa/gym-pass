@@ -77,7 +77,7 @@ class MembershipRegisterApiTest {
                 .andExpect(jsonPath("$.remainingCount").doesNotExist())
                 .andExpect(jsonPath("$.paymentAmount").value(300000));
         Map<String, Object> row = jdbcTemplate.queryForMap(
-                "SELECT branch_id, type, status, start_date, end_date, remaining_count, price"
+                "SELECT branch_id, type, status, start_date, end_date, months, remaining_count, price"
                         + " FROM membership WHERE member_id = ?",
                 memberId);
         assertThat(row)
@@ -85,6 +85,7 @@ class MembershipRegisterApiTest {
                 .containsEntry("type", "PERIOD")
                 .containsEntry("status", "ACTIVE")
                 .containsEntry("end_date", java.sql.Date.valueOf("2026-12-17"))
+                .containsEntry("months", 3)
                 .containsEntry("remaining_count", null)
                 .containsEntry("price", 300000L);
         Map<String, Object> history = jdbcTemplate.queryForMap(
@@ -100,7 +101,7 @@ class MembershipRegisterApiTest {
     }
 
     @Test
-    @DisplayName("횟수제 회원권을 등록하면 201, 잔여 횟수 = 등록 횟수로 저장된다")
+    @DisplayName("[TC-2-04] 횟수제 회원권을 등록하면 201, 종료일 = 시작일+6개월, 개월 수 6, 잔여 횟수 = 등록 횟수로 저장된다")
     void registerCount() throws Exception {
         // given
         long memberId = fixture.createMember(2);
@@ -114,8 +115,11 @@ class MembershipRegisterApiTest {
                 .andExpect(jsonPath("$.endDate").value("2027-03-17"))
                 .andExpect(jsonPath("$.remainingCount").value(10));
         Map<String, Object> row = jdbcTemplate.queryForMap(
-                "SELECT total_count, remaining_count FROM membership WHERE member_id = ?", memberId);
-        assertThat(row).containsEntry("total_count", 10).containsEntry("remaining_count", 10);
+                "SELECT months, total_count, remaining_count FROM membership WHERE member_id = ?", memberId);
+        assertThat(row)
+                .containsEntry("months", 6)
+                .containsEntry("total_count", 10)
+                .containsEntry("remaining_count", 10);
         assertThat(fixture.countHistories(memberId)).isEqualTo(1);
     }
 

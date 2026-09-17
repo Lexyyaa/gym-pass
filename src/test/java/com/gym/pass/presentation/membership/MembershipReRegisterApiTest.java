@@ -150,8 +150,9 @@ class MembershipReRegisterApiTest {
         long memberId = fixture.createMember(6);
         LocalDate today = MembershipApiFixture.today();
         jdbcTemplate.update(
-                "INSERT INTO membership (member_id, branch_id, type, status, start_date, end_date, price,"
-                        + " created_at, updated_at) VALUES (?, 930002, 'PERIOD', 'ACTIVE', ?, ?, 0, NOW(6), NOW(6))",
+                "INSERT INTO membership (member_id, branch_id, type, status, start_date, end_date, months, price,"
+                        + " created_at, updated_at)"
+                        + " VALUES (?, 930002, 'PERIOD', 'ACTIVE', ?, ?, 1, 0, NOW(6), NOW(6))",
                 memberId,
                 today,
                 today.plusMonths(1));

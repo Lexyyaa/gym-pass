@@ -43,6 +43,7 @@ class MembershipRegisterTest {
 
         // then
         assertThat(membership.getEndDate()).isEqualTo(LocalDate.of(2027, 3, 17));
+        assertThat(membership.getMonths()).isEqualTo(6);
         assertThat(membership.getTotalCount()).isEqualTo(10);
         assertThat(membership.getRemainingCount()).isEqualTo(10);
         assertThat(membership.getStatus()).isEqualTo(MembershipStatus.ACTIVE);
@@ -147,6 +148,7 @@ class MembershipRegisterTest {
 
         // then
         assertThat(periodMembership.getEndDate()).isEqualTo(LocalDate.of(2036, 9, 17));
+        assertThat(periodMembership.getMonths()).isEqualTo(120);
         assertThat(countMembership.getRemainingCount()).isEqualTo(1000);
     }
 

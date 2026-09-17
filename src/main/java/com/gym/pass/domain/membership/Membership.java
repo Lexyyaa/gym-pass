@@ -65,6 +65,10 @@ public class Membership extends BaseTimeEntity {
     @Column(nullable = false)
     private LocalDate endDate;
 
+    /** 개월 수. 기간제 = 등록 개월, 횟수제 = 6. 정지 상한 계산에 쓴다 (D-24). */
+    @Column(nullable = false)
+    private Integer months;
+
     private Integer totalCount;
 
     private Integer remainingCount;
@@ -84,7 +88,8 @@ public class Membership extends BaseTimeEntity {
         this.type = membershipType;
         this.status = MembershipStatus.ACTIVE;
         this.startDate = registration.startDate();
-        this.endDate = membershipType.calculateEndDate(registration.startDate(), registration.months());
+        this.months = membershipType.validityMonths(registration.months());
+        this.endDate = registration.startDate().plusMonths(this.months);
         this.totalCount = membershipType.initialCount(registration.count());
         this.remainingCount = this.totalCount;
         this.price = registration.price();
