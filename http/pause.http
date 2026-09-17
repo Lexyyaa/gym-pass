@@ -425,3 +425,50 @@ X-Branch-Id: 1
 # @db SELECT COUNT(*) FROM membership_history WHERE membership_id = {{orderMembershipId}} AND event_type = 'RESUMED' => 2
 POST {{host}}/api/memberships/{{orderMembershipId}}/pauses/{{pauseAId}}/release
 X-Branch-Id: 1
+
+### [TC-4-20-끝경계-준비] 2일 정지 경계 검증용 회원 등록
+# @expect 201
+POST {{host}}/api/members
+Content-Type: application/json
+X-Branch-Id: 1
+
+{ "name": "문소율", "phone": "010-9300-0005" }
+
+### [TC-4-20-끝경계-준비2] 오늘 시작 기간제 1개월 (종료일 2026-10-17)
+# @uses edgeMemberId = [TC-4-20-끝경계-준비].$.memberId
+# @expect 201
+POST {{host}}/api/memberships
+Content-Type: application/json
+X-Branch-Id: 1
+
+{ "memberId": {{edgeMemberId}}, "type": "PERIOD", "startDate": "2026-09-17", "months": 1, "paymentAmount": 100000 }
+
+### [TC-4-20-끝경계-A] 9/18부터 3일 → 종료일 10/20
+# @uses edgeMembershipId = [TC-4-20-끝경계-준비2].$.membershipId
+# @expect 200
+# @expect $.membershipEndDate == "2026-10-20"
+POST {{host}}/api/memberships/{{edgeMembershipId}}/pauses
+Content-Type: application/json
+X-Branch-Id: 1
+
+{ "startDate": "2026-09-18", "days": 3 }
+
+### [TC-4-20-끝경계-B] 10/19부터 2일 (10/19~10/20) → 종료일 10/22
+# @uses edgeMembershipId = [TC-4-20-끝경계-준비2].$.membershipId
+# @expect 200
+# @expect $.membershipEndDate == "2026-10-22"
+POST {{host}}/api/memberships/{{edgeMembershipId}}/pauses
+Content-Type: application/json
+X-Branch-Id: 1
+
+{ "startDate": "2026-10-19", "days": 2 }
+
+### [TC-4-20-끝경계] A 해제 시 새 종료일 10/19 < B 종료일 10/20 → 409 (시작일은 10/19로 같아도 거부)
+# @uses edgeMembershipId = [TC-4-20-끝경계-준비2].$.membershipId
+# @uses edgeAId = [TC-4-20-끝경계-A].$.pauseId
+# @expect 409
+# @expect $.errorCode == "PAUSE_NOT_RELEASABLE"
+# @db SELECT end_date FROM membership WHERE id = {{edgeMembershipId}} => 2026-10-22
+# @db SELECT released_date IS NULL FROM membership_pause WHERE id = {{edgeAId}} => 1
+POST {{host}}/api/memberships/{{edgeMembershipId}}/pauses/{{edgeAId}}/release
+X-Branch-Id: 1
