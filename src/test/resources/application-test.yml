@@ -1,0 +1,6 @@
+# test 프로파일: main application.yml 위에 덮어쓸 값만 둔다 (파일을 통째로 대체하지 않는다)
+# datasource는 Testcontainers @ServiceConnection이 주입한다
+spring:
+  jpa:
+    hibernate:
+      ddl-auto: create-drop

@@ -1,12 +1,15 @@
 plugins {
     id 'java'
-    id 'org.springframework.boot' version '4.1.1'
+    id 'org.springframework.boot' version '3.5.5'
     id 'io.spring.dependency-management' version '1.1.7'
+    id 'com.diffplug.spotless' version '8.10.2'
 }
 
 group = 'com.gym'
 version = '0.0.1-SNAPSHOT'
-description = 'gym'
+
+// Boot 3.5.5가 관리하는 1.21.3보다 최신 패치. 최신 Docker Engine과의 docker-java 호환 문제를 피한다
+ext['testcontainers.version'] = '1.21.4'
 
 java {
     toolchain {
@@ -19,11 +22,48 @@ repositories {
 }
 
 dependencies {
-    implementation 'org.springframework.boot:spring-boot-starter'
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+    implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+    implementation 'org.springframework.boot:spring-boot-starter-validation'
+    implementation 'org.springframework.boot:spring-boot-starter-actuator'
+    implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.8.17'
+    compileOnly 'org.projectlombok:lombok'
+    runtimeOnly 'com.mysql:mysql-connector-j'
+    annotationProcessor 'org.projectlombok:lombok'
+
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.springframework.boot:spring-boot-testcontainers'
+    testImplementation 'org.testcontainers:junit-jupiter'
+    testImplementation 'org.testcontainers:mysql'
+    testImplementation 'com.tngtech.archunit:archunit-junit5:1.5.0'
+    testCompileOnly 'org.projectlombok:lombok'
+    testAnnotationProcessor 'org.projectlombok:lombok'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
 
 tasks.named('test') {
     useJUnitPlatform()
+}
+
+// 구조 규칙만 따로 돌린다 (DB 불필요). `test`에도 포함되어 build에서 함께 검사된다
+tasks.register('archTest', Test) {
+    description = 'Runs ArchUnit architecture rules.'
+    group = 'verification'
+    testClassesDirs = sourceSets.test.output.classesDirs
+    classpath = sourceSets.test.runtimeClasspath
+    useJUnitPlatform()
+    filter {
+        includeTestsMatching '*ArchitectureTest'
+    }
+}
+
+// 포매팅 규칙. `check`(= build)에 spotlessCheck가 연결되어 위반 시 빌드가 깨진다
+spotless {
+    java {
+        target 'src/**/*.java'
+        palantirJavaFormat('2.98.0')
+        removeUnusedImports()
+        trimTrailingWhitespace()
+        endWithNewline()
+    }
 }
