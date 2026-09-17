@@ -1,0 +1,359 @@
+@host = http://localhost:8080
+
+# F4 정지와 연장 — API-4 · API-5 (+ 정지 중 출입 거부 FR-4.4)
+# 빈 DB에서 이 파일만 실행하는 것을 전제한다. 실행일 2026-09-17 기준으로 날짜를 고정했다
+# seed(03 §9)
+# - 회원권 1: 회원 1 · 지점 1 · 기간제 12개월 · 종료일 2027-09-01 · 정지 상한 3회 / 84일
+# - 회원권 2: 회원 2 · 지점 1 · 횟수제 10회 · 종료일 2027-03-01 · months 6 → 정지 상한 42일
+# - 회원권 3: 회원 3 · EXPIRED
+# - 회원권 4: 회원 4 · 지점 2 · 기간제
+# TC-4-02(월말 · 2월 파라미터)는 도메인 파라미터 테스트로 확인한다
+
+### [TC-4-01] 미래 예약 정지 7일 → 종료일 +7, 상태 ACTIVE 유지
+# @expect 200
+# @expect $.membershipId == 1
+# @expect $.startDate == "2026-09-20"
+# @expect $.endDate == "2026-09-26"
+# @expect $.days == 7
+# @expect $.membershipEndDate == "2027-09-08"
+# @db SELECT end_date FROM membership WHERE id = 1 => 2027-09-08
+# @db SELECT status FROM membership WHERE id = 1 => ACTIVE
+# @db SELECT COUNT(*) FROM membership_history WHERE membership_id = 1 AND event_type = 'PAUSED' AND end_date_before = '2027-09-01' AND end_date_after = '2027-09-08' => 1
+POST {{host}}/api/memberships/1/pauses
+Content-Type: application/json
+X-Branch-Id: 1
+
+{ "startDate": "2026-09-20", "days": 7 }
+
+### [TC-4-08] 기존 정지와 겹치는 기간 → 409, 종료일 불변
+# @expect 409
+# @expect $.errorCode == "PAUSE_OVERLAPPED"
+# @db SELECT COUNT(*) FROM membership_pause WHERE membership_id = 1 => 1
+# @db SELECT end_date FROM membership WHERE id = 1 => 2027-09-08
+POST {{host}}/api/memberships/1/pauses
+Content-Type: application/json
+X-Branch-Id: 1
+
+{ "startDate": "2026-09-25", "days": 3 }
+
+### [TC-4-09] 시작일이 과거 → 400
+# @expect 400
+# @expect $.errorCode == "PAUSE_START_DATE_PAST"
+# @db SELECT COUNT(*) FROM membership_pause WHERE membership_id = 1 => 1
+POST {{host}}/api/memberships/1/pauses
+Content-Type: application/json
+X-Branch-Id: 1
+
+{ "startDate": "2026-09-16", "days": 1 }
+
+### [TC-4-05] 만료된 회원권(3) 정지 → 409
+# @expect 409
+# @expect $.errorCode == "MEMBERSHIP_NOT_PAUSABLE"
+# @db SELECT COUNT(*) FROM membership_pause WHERE membership_id = 3 => 0
+POST {{host}}/api/memberships/3/pauses
+Content-Type: application/json
+X-Branch-Id: 1
+
+{ "startDate": "2026-09-20", "days": 1 }
+
+### [TC-4-11] 없는 회원권 정지 → 404
+# @expect 404
+# @expect $.errorCode == "MEMBERSHIP_NOT_FOUND"
+POST {{host}}/api/memberships/999999/pauses
+Content-Type: application/json
+X-Branch-Id: 1
+
+{ "startDate": "2026-09-20", "days": 1 }
+
+### [TC-4-03] 누적 일수 상한 초과 (횟수제 42일 < 43일) → 409, 종료일 불변
+# @expect 409
+# @expect $.errorCode == "PAUSE_DAYS_LIMIT_EXCEEDED"
+# @db SELECT COUNT(*) FROM membership_pause WHERE membership_id = 2 => 0
+# @db SELECT end_date FROM membership WHERE id = 2 => 2027-03-01
+POST {{host}}/api/memberships/2/pauses
+Content-Type: application/json
+X-Branch-Id: 1
+
+{ "startDate": "2026-10-01", "days": 43 }
+
+### [TC-4-04-준비1] 회원권 1에 두 번째 정지 (1일)
+# @expect 200
+# @expect $.membershipEndDate == "2027-09-09"
+POST {{host}}/api/memberships/1/pauses
+Content-Type: application/json
+X-Branch-Id: 1
+
+{ "startDate": "2026-10-01", "days": 1 }
+
+### [TC-4-04-준비2] 회원권 1에 세 번째 정지 (1일)
+# @expect 200
+# @expect $.membershipEndDate == "2027-09-10"
+POST {{host}}/api/memberships/1/pauses
+Content-Type: application/json
+X-Branch-Id: 1
+
+{ "startDate": "2026-10-05", "days": 1 }
+
+### [TC-4-04] 네 번째 정지 → 409, 정지 3건 유지
+# @expect 409
+# @expect $.errorCode == "PAUSE_COUNT_LIMIT_EXCEEDED"
+# @db SELECT COUNT(*) FROM membership_pause WHERE membership_id = 1 => 3
+# @db SELECT end_date FROM membership WHERE id = 1 => 2027-09-10
+POST {{host}}/api/memberships/1/pauses
+Content-Type: application/json
+X-Branch-Id: 1
+
+{ "startDate": "2026-10-10", "days": 1 }
+
+### [TC-4-13] 시작 전 조기 해제 → 사용 0일, 종료일 원복
+# @uses futurePauseId = [TC-4-04-준비1].$.pauseId
+# @expect 200
+# @expect $.usedDays == 0
+# @expect $.membershipEndDate == "2027-09-09"
+# @db SELECT released_date FROM membership_pause WHERE id = {{futurePauseId}} => 2026-09-17
+# @db SELECT COUNT(*) FROM membership_history WHERE membership_id = 1 AND event_type = 'RESUMED' => 1
+POST {{host}}/api/memberships/1/pauses/{{futurePauseId}}/release
+X-Branch-Id: 1
+
+### [TC-4-13-횟수] 시작 전 해제한 정지는 횟수에서 빠져 네 번째 등록이 허용된다
+# @expect 200
+# @expect $.membershipEndDate == "2027-09-10"
+# @db SELECT COUNT(*) FROM membership_pause WHERE membership_id = 1 => 4
+POST {{host}}/api/memberships/1/pauses
+Content-Type: application/json
+X-Branch-Id: 1
+
+{ "startDate": "2026-10-20", "days": 1 }
+
+### [TC-4-06-준비] 회원권 2 오늘 시작 정지 3일 → 즉시 PAUSED
+# @expect 200
+# @expect $.startDate == "2026-09-17"
+# @expect $.endDate == "2026-09-19"
+# @expect $.membershipEndDate == "2027-03-04"
+# @db SELECT status FROM membership WHERE id = 2 => PAUSED
+POST {{host}}/api/memberships/2/pauses
+Content-Type: application/json
+X-Branch-Id: 1
+
+{ "startDate": "2026-09-17", "days": 3 }
+
+### [TC-4-06] 정지 기간 중 출입 → 409, 기록 · 차감 없음
+# @expect 409
+# @expect $.errorCode == "ATTENDANCE_MEMBERSHIP_PAUSED"
+# @db SELECT COUNT(*) FROM attendance_record WHERE member_id = 2 => 0
+# @db SELECT remaining_count FROM membership WHERE id = 2 => 10
+POST {{host}}/api/attendances
+Content-Type: application/json
+X-Branch-Id: 1
+
+{ "memberId": 2 }
+
+### [TC-4-07] 진행 중 정지를 당일 해제 → 사용 1일, 미사용 2일만큼 종료일 되돌림, 즉시 ACTIVE
+# @uses todayPauseId = [TC-4-06-준비].$.pauseId
+# @expect 200
+# @expect $.usedDays == 1
+# @expect $.membershipEndDate == "2027-03-02"
+# @db SELECT end_date FROM membership WHERE id = 2 => 2027-03-02
+# @db SELECT status FROM membership WHERE id = 2 => ACTIVE
+POST {{host}}/api/memberships/2/pauses/{{todayPauseId}}/release
+X-Branch-Id: 1
+
+### [TC-4-12] 해제 당일 출입 → 409 (해제 당일까지 정지, D-8)
+# @expect 409
+# @expect $.errorCode == "ATTENDANCE_MEMBERSHIP_PAUSED"
+# @db SELECT COUNT(*) FROM attendance_record WHERE member_id = 2 => 0
+POST {{host}}/api/attendances
+Content-Type: application/json
+X-Branch-Id: 1
+
+{ "memberId": 2 }
+
+### [TC-4-10] 이미 해제된 정지 재해제 → 409, 종료일 불변
+# @uses todayPauseId = [TC-4-06-준비].$.pauseId
+# @expect 409
+# @expect $.errorCode == "PAUSE_NOT_RELEASABLE"
+# @db SELECT end_date FROM membership WHERE id = 2 => 2027-03-02
+POST {{host}}/api/memberships/2/pauses/{{todayPauseId}}/release
+X-Branch-Id: 1
+
+### [TC-4-14] 다른 회원권의 pauseId로 해제 → 404
+# @uses otherPauseId = [TC-4-01].$.pauseId
+# @expect 404
+# @expect $.errorCode == "PAUSE_NOT_FOUND"
+# @db SELECT released_date IS NULL FROM membership_pause WHERE id = {{otherPauseId}} => 1
+POST {{host}}/api/memberships/2/pauses/{{otherPauseId}}/release
+X-Branch-Id: 1
+
+### [TC-4-16-준비] 지점 2 회원권(4)에 소속 지점에서 정지 등록
+# @expect 200
+# @expect $.membershipId == 4
+POST {{host}}/api/memberships/4/pauses
+Content-Type: application/json
+X-Branch-Id: 2
+
+{ "startDate": "2026-09-30", "days": 2 }
+
+### [TC-4-15] 타 지점 회원권 정지 → 403, 정지 건수 불변
+# @expect 403
+# @expect $.errorCode == "BRANCH_FORBIDDEN"
+# @db SELECT COUNT(*) FROM membership_pause WHERE membership_id = 4 => 1
+POST {{host}}/api/memberships/4/pauses
+Content-Type: application/json
+X-Branch-Id: 1
+
+{ "startDate": "2026-10-10", "days": 1 }
+
+### [TC-4-16] 타 지점 회원권의 정지 해제 → 403, 해제 안 됨
+# @uses branch2PauseId = [TC-4-16-준비].$.pauseId
+# @expect 403
+# @expect $.errorCode == "BRANCH_FORBIDDEN"
+# @db SELECT released_date IS NULL FROM membership_pause WHERE id = {{branch2PauseId}} => 1
+POST {{host}}/api/memberships/4/pauses/{{branch2PauseId}}/release
+X-Branch-Id: 1
+
+### [TC-4-17-준비] 잔여 0 검증용 회원 등록
+# @expect 201
+POST {{host}}/api/members
+Content-Type: application/json
+X-Branch-Id: 1
+
+{ "name": "임나래", "phone": "010-9300-0001" }
+
+### [TC-4-17-준비2] 횟수제 1회 회원권 등록
+# @uses zeroMemberId = [TC-4-17-준비].$.memberId
+# @expect 201
+POST {{host}}/api/memberships
+Content-Type: application/json
+X-Branch-Id: 1
+
+{ "memberId": {{zeroMemberId}}, "type": "COUNT", "startDate": "2026-09-17", "count": 1, "paymentAmount": 20000 }
+
+### [TC-4-17-준비3] 출입으로 잔여 1 → 0
+# @uses zeroMemberId = [TC-4-17-준비].$.memberId
+# @expect 200
+# @db SELECT remaining_count FROM membership WHERE member_id = {{zeroMemberId}} => 0
+POST {{host}}/api/attendances
+Content-Type: application/json
+X-Branch-Id: 1
+
+{ "memberId": {{zeroMemberId}} }
+
+### [TC-4-17] 잔여 0인 횟수제 정지 → 409 (D-28), 정지 없음
+# @uses zeroMembershipId = [TC-4-17-준비2].$.membershipId
+# @expect 409
+# @expect $.errorCode == "MEMBERSHIP_NOT_PAUSABLE"
+# @db SELECT COUNT(*) FROM membership_pause WHERE membership_id = {{zeroMembershipId}} => 0
+POST {{host}}/api/memberships/{{zeroMembershipId}}/pauses
+Content-Type: application/json
+X-Branch-Id: 1
+
+{ "startDate": "2026-09-20", "days": 1 }
+
+### [TC-4-01-검증] days 0 → 400 (Request 검증)
+# @expect 400
+# @expect $.errorCode == "COMMON_INVALID_INPUT"
+POST {{host}}/api/memberships/1/pauses
+Content-Type: application/json
+X-Branch-Id: 1
+
+{ "startDate": "2026-11-01", "days": 0 }
+
+### [TC-4-18] 정지 시작일이 회원권 현재 종료일(2027-09-10) 뒤 → 400, 종료일 · 정지 건수 불변
+# @expect 400
+# @expect $.errorCode == "PAUSE_OUT_OF_PERIOD"
+# @db SELECT end_date FROM membership WHERE id = 1 => 2027-09-10
+# @db SELECT COUNT(*) FROM membership_pause WHERE membership_id = 1 => 4
+POST {{host}}/api/memberships/1/pauses
+Content-Type: application/json
+X-Branch-Id: 1
+
+{ "startDate": "2028-01-01", "days": 1 }
+
+### [TC-4-18-준비] 시작 전 회원권 검증용 회원 등록
+# @expect 201
+POST {{host}}/api/members
+Content-Type: application/json
+X-Branch-Id: 1
+
+{ "name": "배도현", "phone": "010-9300-0002" }
+
+### [TC-4-18-준비2] 2026-12-01 시작 기간제 1개월 회원권
+# @uses futureStartMemberId = [TC-4-18-준비].$.memberId
+# @expect 201
+# @expect $.endDate == "2027-01-01"
+POST {{host}}/api/memberships
+Content-Type: application/json
+X-Branch-Id: 1
+
+{ "memberId": {{futureStartMemberId}}, "type": "PERIOD", "startDate": "2026-12-01", "months": 1, "paymentAmount": 100000 }
+
+### [TC-4-18-시작전] 정지 시작일이 회원권 시작일(2026-12-01) 앞 → 400
+# @uses futureStartMembershipId = [TC-4-18-준비2].$.membershipId
+# @expect 400
+# @expect $.errorCode == "PAUSE_OUT_OF_PERIOD"
+# @db SELECT end_date FROM membership WHERE id = {{futureStartMembershipId}} => 2027-01-01
+# @db SELECT COUNT(*) FROM membership_pause WHERE membership_id = {{futureStartMembershipId}} => 0
+POST {{host}}/api/memberships/{{futureStartMembershipId}}/pauses
+Content-Type: application/json
+X-Branch-Id: 1
+
+{ "startDate": "2026-10-01", "days": 3 }
+
+### [TC-4-19-준비] 당일 출입 검증용 회원 등록
+# @expect 201
+POST {{host}}/api/members
+Content-Type: application/json
+X-Branch-Id: 1
+
+{ "name": "서유나", "phone": "010-9300-0003" }
+
+### [TC-4-19-준비2] 오늘 시작 기간제 3개월 회원권 (종료일 2026-12-17)
+# @uses usedMemberId = [TC-4-19-준비].$.memberId
+# @expect 201
+# @expect $.endDate == "2026-12-17"
+POST {{host}}/api/memberships
+Content-Type: application/json
+X-Branch-Id: 1
+
+{ "memberId": {{usedMemberId}}, "type": "PERIOD", "startDate": "2026-09-17", "months": 3, "paymentAmount": 300000 }
+
+### [TC-4-19-준비3] 오늘 출입
+# @uses usedMemberId = [TC-4-19-준비].$.memberId
+# @expect 200
+POST {{host}}/api/attendances
+Content-Type: application/json
+X-Branch-Id: 1
+
+{ "memberId": {{usedMemberId}} }
+
+### [TC-4-19] 오늘 출입한 회원권의 오늘 시작 정지 → 409, 종료일 불변
+# @uses usedMembershipId = [TC-4-19-준비2].$.membershipId
+# @expect 409
+# @expect $.errorCode == "PAUSE_START_DATE_USED"
+# @db SELECT end_date FROM membership WHERE id = {{usedMembershipId}} => 2026-12-17
+# @db SELECT COUNT(*) FROM membership_pause WHERE membership_id = {{usedMembershipId}} => 0
+POST {{host}}/api/memberships/{{usedMembershipId}}/pauses
+Content-Type: application/json
+X-Branch-Id: 1
+
+{ "startDate": "2026-09-17", "days": 2 }
+
+### [TC-4-19-내일] 같은 회원권의 내일 시작 정지 → 200, 종료일 +2
+# @uses usedMembershipId = [TC-4-19-준비2].$.membershipId
+# @expect 200
+# @expect $.membershipEndDate == "2026-12-19"
+# @db SELECT COUNT(*) FROM membership_pause WHERE membership_id = {{usedMembershipId}} => 1
+POST {{host}}/api/memberships/{{usedMembershipId}}/pauses
+Content-Type: application/json
+X-Branch-Id: 1
+
+{ "startDate": "2026-09-18", "days": 2 }
+
+### [TC-4-09-상한] 시작일 +10000-01-01 → 4xx (500 아님), 정지 없음
+# @expect 400
+# @db SELECT COUNT(*) FROM membership_pause WHERE start_date > '9999-01-01' => 0
+POST {{host}}/api/memberships/4/pauses
+Content-Type: application/json
+X-Branch-Id: 2
+
+{ "startDate": "+10000-01-01", "days": 2 }
