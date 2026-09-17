@@ -36,7 +36,7 @@ tools: Read, Grep, Glob, Bash
 - 리스트 요청 필드에 `@Valid`가 있는가, 요소 중복을 검사하는가
 - 사용자 입력 오류가 500으로 샐 경로가 있는가 (VO 생성자 예외, NPE 등)
 - `catch`가 `BusinessException`을 삼키지 않는가
-- 엔티티의 `@Table` 제약·인덱스·`nullable`이 `02-domain-model.md` §6과 같은가
+- 엔티티의 `@Table` 제약·인덱스·`nullable`이 `03-domain-model.md` §6과 같은가
 - 락 조회 조건 컬럼에 인덱스가 있는가
 - 외부 I/O와 DB 커밋 순서가 한쪽만 성공한 상태를 남기지 않는가
 - 테스트가 상태코드만 보거나 "예외가 안 났다"만 확인하지 않는가

@@ -19,11 +19,11 @@ disable-model-invocation: true
 | 1 | JDK 21 | `/usr/libexec/java_home -v 21` (macOS) 또는 `./gradlew -q javaToolchains` | 21 존재 |
 | 2 | Gradle | `./gradlew --version` | 정상 출력 |
 | 3 | Docker | `docker info` | 데몬 응답 |
-| 4 | 포트 | `lsof -i :3310 -i :8080` | 비어 있음 (`app-mysql`이 3310을 쓰는 것은 정상) |
+| 4 | 포트 | `lsof -i :3309 -i :8080` | 비어 있음 (`gym-mysql`이 3309를 쓰는 것은 정상) |
 | 5 | git 상태 | `git status -sb`, `git fetch` | `main`, 변경 없음, 원격과 같음 |
 | 6 | 원격 · gh | `git remote -v`, `gh auth status`, `gh repo view --json name,viewerPermission` | 로그인됨, 쓰기 권한 |
 | 6-1 | curl · jq | `curl --version`, `jq --version` | 둘 다 있음 (실측에 필요) |
-| 7 | 템플릿 상태 | `docs/design/00~03`, `docs/task_list.md` | 채워지지 않은 템플릿 (아래 참고) |
+| 7 | 템플릿 상태 | `docs/design/00~04`, `docs/task_list.md` | 채워지지 않은 템플릿 (아래 참고) |
 | 8 | 빌드 · 이미지 캐시 | `./gradlew spotlessApply build` | 통과 (아래 참고) |
 | 9 | 실서버 | `docker compose up -d` → `./gradlew bootRun` → `/actuator/health` · `/swagger-ui.html` | UP · 200 |
 

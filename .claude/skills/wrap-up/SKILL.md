@@ -40,12 +40,12 @@ disable-model-invocation: true
 
 - `doc-writer`를 호출한다
   - 지시:
-    - "`01` §4의 모든 SUB 항목을 채워 README를 제출용으로 다시 쓴다."
+    - "`02` §4의 모든 SUB 항목을 채워 README를 제출용으로 다시 쓴다."
     - "AI 활용 내역은 `docs/ai-log/README.md`에 쓴다. 기능별 ai-log를 요약한다."
     - "미구현·보류 항목은 README의 한계 절에 사유와 함께 적는다"
 - `OpenApiConfig`의 TODO(제목·설명)가 남았으면 채운다
   - 커밋: `chore: OpenAPI 제목·설명 작성`
-- `01` §4 SUB 표의 완료 칸을 체크한다
+- `02` §4 SUB 표의 완료 칸을 체크한다
 - 커밋 (각 커밋에 task_list T9-x 체크를 넣는다)
   - `docs: README 작성 (실행 방법·기술 스택 및 선택 이유·API)`
   - `docs: AI 활용 내역 정리`

@@ -18,12 +18,12 @@ tools: Read, Write, Edit, Grep, Glob
 입력은 세 가지다.
 
 - `docs/design/00-assignment.md` — 과제 원문
-- `docs/design/00-analysis.md` — 분석 (`S-n` · `H-n` · `C-n`)
-- `00-analysis.md` §7 — 사용자 결정 기록
+- `docs/design/01-analysis.md` — 분석 (`S-n` · `H-n` · `C-n`)
+- `01-analysis.md` §7 — 사용자 결정 기록
 
 아래 순서로 채운다. 앞 문서가 끝나야 다음으로 간다.
 
-1. `01-requirements.md`
+1. `02-requirements.md`
    - 원문 한 문장 = `FR` 한 행
    - `FR`·`TC`의 기능 번호 = `task_list`의 F 번호
      - F1 기초 설정은 `TC-1-xx`만 (FR 없음)
@@ -34,10 +34,10 @@ tools: Read, Write, Edit, Grep, Glob
        - 하지 않을 것은 §1 범위 밖에 `H-n`과 함께 적는다
      - §2 "깨지는 시나리오" → TC 표의 실패 · 엣지 · 동시성 케이스
      - §7 결정 → §5 `D-n` (관련 `C-n`을 적는다)
-2. `02-domain-model.md`
+2. `03-domain-model.md`
    - 용어 · 애그리거트 · 불변식 · 상태 전이 · ERD · 동시성 · seed
    - 용어는 분석 §6 도메인 용어 후보에서 고른다
-3. `03-api-spec.md` — API 목록 · 상세 · 에러 코드
+3. `04-api-spec.md` — API 목록 · 상세 · 에러 코드
 4. `docs/task_list.md` — 기능(F) · 작업(T) · 커밋 메시지 · ID 참조
    - 기능 순서는 분석 §5 평가 비중을 따른다
    - 포기하면 감점이 큰 기능을 앞에 둔다
@@ -48,7 +48,7 @@ tools: Read, Write, Edit, Grep, Glob
 ### F9 마무리
 
 - `README.md`
-  - `01` §4의 `SUB` 항목을 빠짐없이 채운다
+  - `02` §4의 `SUB` 항목을 빠짐없이 채운다
   - 기술 스택은 **선택 이유**까지 쓴다
 - `docs/ai-log/README.md` — AI 활용 내역
   - 어떤 작업에 AI를 썼는지 (기능별 ai-log 링크)
@@ -63,7 +63,7 @@ tools: Read, Write, Edit, Grep, Glob
 - 템플릿의 절 구조와 표 형식을 유지한다
   - 템플릿 주석(`<!-- -->`)의 지침을 따른다
   - 다 채운 절의 주석은 지운다
-- ID 규칙은 `01` 맨 위 표를 따른다
+- ID 규칙은 `02` 맨 위 표를 따른다
   - 한 번 부여한 ID는 바꾸거나 재사용하지 않는다
 - 한 문서를 고치면 그 ID를 참조하는 다른 문서도 같이 맞춘다
 - Mermaid는 `stateDiagram-v2` · `erDiagram` · `sequenceDiagram`만 쓴다
@@ -72,14 +72,14 @@ tools: Read, Write, Edit, Grep, Glob
   - 긴 설명은 표 아래 불릿으로 뺀다
 - 한 줄에 한 가지만 쓴다
   - 줄이 길어지거나 항목이 여러 개면 불릿으로 세로로 나눈다
-- `00-assignment.md` · `00-analysis.md` · `src/`는 수정하지 않는다
+- `00-assignment.md` · `01-analysis.md` · `src/`는 수정하지 않는다
 - 코드에 없는 내용을 README에 "구현됨"으로 쓰지 않는다
 
 ## 결정이 필요한 곳
 
 결정은 사용자가 이미 내렸다. **새로 고르거나 추천하지 않는다.**
 
-- `00-analysis.md` §7에 있는 결정만 `01` §5 `D-n`으로 옮긴다
+- `01-analysis.md` §7에 있는 결정만 `02` §5 `D-n`으로 옮긴다
   - 선택지와 장단점은 분석 `C-n`에서 가져온다
   - `결정` · `근거` 칸은 §7 기록 그대로 쓴다
 - §7에서 보류된 `C-n`

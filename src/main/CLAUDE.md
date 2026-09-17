@@ -48,7 +48,7 @@ com.gym.pass
 - 생성·수정 시각은 `domain/common/BaseTimeEntity`를 상속한다
   - 비즈니스 판단에 쓰는 시각(접수 시각 등)은 따로 필드를 둔다
 - 제약·인덱스·NOT NULL은 엔티티에 선언한다
-  - 기준: `docs/design/02-domain-model.md` §6과 같게
+  - 기준: `docs/design/03-domain-model.md` §6과 같게
 
 ## Repository 3단
 
@@ -101,7 +101,7 @@ com.gym.pass
 - UNIQUE 충돌(`DataIntegrityViolationException`)을 잡아 기존 결과를 돌려줄 때
   - 트랜잭션 밖에서 잡는다
   - 새 트랜잭션에서 재조회한다
-- 락 전략은 `docs/design/02-domain-model.md` §7을 따른다
+- 락 전략은 `docs/design/03-domain-model.md` §7을 따른다
   - 임의로 바꾸지 않는다
 - 외부 I/O(파일·외부 API)와 DB 커밋의 순서를 의식한다
   - 한쪽만 성공한 상태가 남지 않게 한다
@@ -121,7 +121,7 @@ com.gym.pass
   - Bean Validation 실패는 자동 응답된다
     - `INVALID_INPUT` + `필드: 사유` 메시지
 - 새 에러
-  - `docs/design/03-api-spec.md` §4에 먼저 추가
+  - `docs/design/04-api-spec.md` §4에 먼저 추가
   - → `ErrorCode`
   - → 도메인 예외로 던진다
 - `catch (RuntimeException | Exception)`으로 뭉개지 않는다
@@ -157,3 +157,12 @@ com.gym.pass
 - `ddl-auto: update`
   - 마이그레이션 도구 없음
   - 스키마는 엔티티를 따른다
+
+## 병렬 실행
+
+- 서로 결과에 의존하지 않는 단계만 병렬로 돌린다
+    - `reviewer` ∥ `verifier` (스킬에 명시)
+    - ai-log 작성 ∥ 게이트 빌드
+    - 서로 다른 파일만 만지는 독립 작업이 명확할 때의 `implementer` 분할
+        - 커밋 정리는 메인 세션이 순서대로 한다
+- 같은 파일이나 같은 브랜치의 커밋 순서를 만지는 작업은 병렬로 돌리지 않는다

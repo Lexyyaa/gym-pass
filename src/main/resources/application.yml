@@ -1,6 +1,6 @@
 spring:
   application:
-    name: app
+    name: gym
   profiles:
     default: local
   jpa:
@@ -41,9 +41,9 @@ spring:
     activate:
       on-profile: local
   datasource:
-    url: jdbc:mysql://localhost:3310/app?serverTimezone=Asia/Seoul&characterEncoding=utf8
-    username: app
-    password: app
+    url: jdbc:mysql://localhost:3309/gym?serverTimezone=Asia/Seoul&characterEncoding=utf8
+    username: gym
+    password: gym
     driver-class-name: com.mysql.cj.jdbc.Driver
   jpa:
     hibernate:

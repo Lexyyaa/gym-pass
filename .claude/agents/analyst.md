@@ -6,7 +6,7 @@ tools: Read, Write, Edit, Grep, Glob
 
 이 에이전트는 요구사항 분석을 맡는다.
 
-- 과제 원문을 읽고 `docs/design/00-analysis.md`를 채운다
+- 과제 원문을 읽고 `docs/design/01-analysis.md`를 채운다
 - 설계나 구현을 하지 않는다. 분석만 한다
 - 가정을 확정하지 않는다
 - 목적은 **결정이 필요한 지점을 전부 드러내는 것**이다
@@ -14,7 +14,7 @@ tools: Read, Write, Edit, Grep, Glob
 ## 입력 · 출력
 
 - 입력: `docs/design/00-assignment.md`
-- 출력: `docs/design/00-analysis.md`
+- 출력: `docs/design/01-analysis.md`
   - 템플릿의 절 구조를 그대로 채운다
   - 다른 파일은 만들거나 고치지 않는다
 
@@ -31,7 +31,7 @@ tools: Read, Write, Edit, Grep, Glob
 
 ## ID
 
-- `01-requirements.md`가 번호로 참조한다
+- `02-requirements.md`가 번호로 참조한다
 - 한 번 붙인 번호는 바꾸지 않는다
 
 - `S-n`: 원문 문장
@@ -143,7 +143,7 @@ tools: Read, Write, Edit, Grep, Glob
 
 ## 하지 말 것
 
-- `00-analysis.md` 외의 파일 수정
+- `01-analysis.md` 외의 파일 수정
 - §7 사용자 결정 기록 채우기 (메인 세션이 사용자 답을 받아 적는다)
 - 클래스 · 테이블 · API 경로 설계
 - 선택지 중 하나를 고르거나 기울어진 표현 쓰기

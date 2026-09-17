@@ -5,7 +5,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 
 /**
- * 에러 코드 단일 관리. docs/design/03-api-spec.md §4와 1:1로 맞춘다.
+ * 에러 코드 단일 관리. docs/design/04-api-spec.md §4와 1:1로 맞춘다.
  * 새 코드는 문서에 먼저 추가하고, 도메인별 주석 블록 아래에 모은다.
  */
 @Getter
