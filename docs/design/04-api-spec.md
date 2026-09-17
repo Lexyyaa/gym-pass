@@ -104,6 +104,7 @@
 |---|---|
 | FR-5.6 | 상태 동기화: 매일 00:00 KST cron 실행 (D-21) |
 | FR-5.6 | 상태 동기화: 종료일 < 오늘인 `ACTIVE` · `PAUSED` → `EXPIRED` |
+| FR-5.6 | 상태 동기화: 횟수제 잔여 0인 `ACTIVE` · `PAUSED` → `EXPIRED` (D-27) |
 | FR-5.6 | 상태 동기화: 어제로 끝난 정지만 있는(오늘을 포함하는 정지가 없는) `PAUSED` → `ACTIVE` |
 | FR-5.6 | 상태 동기화: 오늘 시작하는 예약 정지가 있는 `ACTIVE` → `PAUSED` |
 | FR-5.6 | 상태 동기화: 현재 상태를 조건에 넣은 bulk UPDATE — 재실행 멱등 |
@@ -131,7 +132,7 @@
 
 ### API-1. 회원 등록 · `POST /api/members`
 
-- 관련: FR-2.1 · FR-7.3(선택) / TC-2-01 · TC-7-02
+- 관련: FR-2.1 · FR-7.3(선택) / TC-2-01 · TC-2-12 · TC-7-02
 
 **Request** Body
 
@@ -160,14 +161,27 @@
 
 | 상태 | errorCode | 조건 |
 |---|---|---|
+| 400 | `MEMBER_INVALID_INPUT` | 도메인 검증 실패 (D-22, TC-2-12) |
 | 409 | `MEMBER_PHONE_DUPLICATED` | 연락처 중복 (FR-7.3 구현 시에만, 선택) |
+
+- `MEMBER_INVALID_INPUT`은 도메인 최후 방어선이다
+  - API로는 Request 검증(`COMMON_INVALID_INPUT`)이 먼저 막아 도달하지 않는다
+  - 그래서 TC-2-12는 API가 아니라 Domain 대상이다
 
 ### API-2. 회원권 등록 · `POST /api/memberships`
 
-- 관련: FR-2.2 · FR-2.3 · FR-2.4 / TC-2-02 ~ TC-2-11
+- 관련: FR-2.2 · FR-2.3 · FR-2.4 / TC-2-02 ~ TC-2-11 · TC-2-13 ~ TC-2-18
 - 회원권은 헤더 지점 소속으로 생성된다
 - 종료일 계산: 기간제 = 시작일 + 개월 (D-6), 횟수제 = 시작일 + 6개월 (D-7)
-- 등록 거부 검사는 회원 기준 전 지점을 본다 (D-15 · D-19, C-22)
+- 개월 수를 저장한다: 기간제 = `months`, 횟수제 = 6 (D-24, 응답 필드는 없음)
+- 입력 규칙 (D-22 · D-23) — 위반은 `MEMBERSHIP_INVALID_INPUT` 400
+  - `type`별 필수 값: 기간제 `months` · 횟수제 `count`
+  - 반대 종류 값 금지: 기간제에 `count` · 횟수제에 `months`
+    - 예외: 반대 종류 값이 0 · 음수면 `@Positive`가 먼저 막아 `COMMON_INVALID_INPUT`이다
+  - 상한: `months` ≤ 120 · `count` ≤ 1000 (`application.yml` 정책 값, C-34)
+  - 하한: `startDate` ≥ 1000-01-01 (C-33, TC-2-17)
+  - 계산된 종료일 ≤ 9999-12-31
+- 등록 거부 검사는 회원 기준 전 지점을 본다 (D-15 · D-19, C-22, TC-2-18)
   - 거부 조건 = 상태 `ACTIVE` · `PAUSED` **그리고** 종료일 ≥ 오늘인 회원권 존재
   - 정지 중(`PAUSED`) 회원도 거부된다 (TC-2-09)
   - 시작일이 미래인 회원권이 있어도 거부된다 (TC-2-11)
@@ -181,9 +195,9 @@
 |---|---|---|---|---|
 | `memberId` | Long | O | `@NotNull`, `@Positive` | 대상 회원 |
 | `type` | String | O | `@NotNull`, `PERIOD` 또는 `COUNT` | 회원권 종류 |
-| `startDate` | String | O | `@NotNull`, `yyyy-MM-dd` | 시작일 (값 제한 없음) |
-| `months` | Integer | △ | `@Positive`, `type=PERIOD`일 때 필수 (서비스 검증) | 기간(개월) |
-| `count` | Integer | △ | `@Positive`, `type=COUNT`일 때 필수 (서비스 검증) | 이용 횟수 |
+| `startDate` | String | O | `@NotNull`, 1000-01-01 ~ (도메인 검증, D-23) | 시작일 (`yyyy-MM-dd`) |
+| `months` | Integer | △ | `@Positive`, 도메인 검증 (D-22 · D-23), 상한 120 | 기간(개월), `type=PERIOD`에서만 |
+| `count` | Integer | △ | `@Positive`, 도메인 검증 (D-22 · D-23), 상한 1000 | 이용 횟수, `type=COUNT`에서만 |
 | `paymentAmount` | Long | O | `@NotNull`, `@PositiveOrZero` | 결제 금액 (저장만) |
 
 ```json
@@ -222,24 +236,40 @@
 
 | 상태 | errorCode | 조건 |
 |---|---|---|
+| 400 | `MEMBERSHIP_INVALID_INPUT` | 도메인 등록 검증 실패 (D-22 · D-23, TC-2-13 ~ TC-2-17) |
 | 404 | `MEMBER_NOT_FOUND` | 회원 없음 (TC-2-08) |
-| 409 | `MEMBERSHIP_ALREADY_ACTIVE` | 종료일 ≥ 오늘인 `ACTIVE` · `PAUSED` 회원권 보유 (TC-2-05 · TC-2-06 · TC-2-09 · TC-2-11) |
+| 409 | `MEMBERSHIP_ALREADY_ACTIVE` | 종료일 ≥ 오늘인 `ACTIVE` · `PAUSED` 회원권 보유 (TC-2-05 · TC-2-06 · TC-2-09 · TC-2-11 · TC-2-18) |
+
+- `MEMBERSHIP_INVALID_INPUT` 조건
+  - `type`별 필수 값 누락 (TC-2-13)
+  - 반대 종류 값 (TC-2-16)
+    - 0 · 음수면 Request 검증이 먼저 막아 `COMMON_INVALID_INPUT`이다
+  - 상한 초과 (TC-2-14)
+  - 시작일 하한 미만 — `startDate` < 1000-01-01 (TC-2-17)
+  - 종료일 범위 초과 (TC-2-15)
+- `MEMBERSHIP_ALREADY_ACTIVE`는 다른 지점의 유효 회원권에도 난다 (D-15 전 지점 검사, TC-2-18)
 
 ### API-3. 출입 기록 · `POST /api/attendances`
 
-- 관련: FR-3.1 ~ FR-3.4 · FR-4.4 / TC-3-01 ~ TC-3-08 · TC-4-06 · TC-4-12
+- 관련: FR-3.1 ~ FR-3.4 · FR-4.4 / TC-3-01 ~ TC-3-10 · TC-4-06 · TC-4-12
 - 출입 시각은 서버 시각(KST)으로 기록한다
 - 판정 대상 = 회원의 상태 `ACTIVE` · `PAUSED` 그리고 종료일 ≥ 오늘인 회원권
   - 등록 규칙(C-22)으로 항상 1건 이하다
+- 판정 순서
+  1. 회원 존재 — 없으면 404 `MEMBER_NOT_FOUND` (TC-3-09)
+  2. 판정 대상 존재 — 없으면 409 `ATTENDANCE_NO_VALID_MEMBERSHIP`
+  3. 지점 — 판정 대상이 타 지점 소속이면 403 `BRANCH_FORBIDDEN` (TC-3-08)
+  4. 유효 판정 (아래 조건)
 - 판정 조건
-  - 시작일 ≤ 오늘 ≤ 종료일
+  - 시작일 ≤ 오늘 ≤ 종료일 (TC-3-05 · TC-3-10)
   - 오늘이 정지 구간 밖 — 조기 해제한 정지는 해제 당일까지 정지 구간이다 (C-23, TC-4-12)
-  - 횟수제는 잔여 ≥ 1
-  - 저장 상태가 아니라 날짜 · 정지 구간 · 잔여로 판정한다
+  - 횟수제는 잔여 ≥ 1 **또는** 오늘(KST) 이미 차감됨 (D-27)
+  - 저장 상태가 아니라 날짜 · 정지 구간 · 잔여 · 오늘 차감 여부로 판정한다
 - 같은 KST 달력일의 두 번째 이후 출입도 **동일한 성공 응답** — 기록은 남기고 차감만 생략 (D-11)
+  - 잔여가 0이 된 당일의 재출입도 같다 (D-27, TC-3-06)
   - 응답만으로 차감 여부를 구분할 수 없다 (검증은 DB 잔여 횟수로)
+- 차감으로 잔여가 0이 돼도 회원권 상태는 바뀌지 않는다 — 다음 00:00 상태 동기화 배치가 `EXPIRED`로 바꾼다 (D-27)
 - 거부된 출입 시도는 기록하지 않는다
-- 유효 회원권이 타 지점 소속이면 403 (TC-3-08)
 - 동시 요청 제어는 [03 §7](03-domain-model.md)
 
 **Request** Body
@@ -268,8 +298,8 @@
 
 | 상태 | errorCode | 조건 |
 |---|---|---|
-| 404 | `MEMBER_NOT_FOUND` | 회원 없음 |
-| 409 | `ATTENDANCE_NO_VALID_MEMBERSHIP` | 유효 회원권 없음 — 미보유 · 기간 밖 · 만료 · 취소 · 잔여 0 (TC-3-04 ~ 06) |
+| 404 | `MEMBER_NOT_FOUND` | 회원 없음 (TC-3-09) |
+| 409 | `ATTENDANCE_NO_VALID_MEMBERSHIP` | 유효 회원권 없음 — 미보유 · 기간 밖(시작 전 · 종료 후) · 만료 · 취소 · 잔여 0(오늘 차감 없음) (TC-3-04 ~ 06 · TC-3-10, D-27) |
 | 409 | `ATTENDANCE_MEMBERSHIP_PAUSED` | 정지 기간 중 출입 · 조기 해제 당일 출입 (TC-4-06 · TC-4-12) |
 | 403 | `BRANCH_FORBIDDEN` | 유효 회원권이 타 지점 소속 (TC-3-08) |
 
@@ -295,7 +325,7 @@
 
 | 필드 | 타입 | 필수 | 검증 | 설명 |
 |---|---|---|---|---|
-| `startDate` | String | O | `@NotNull`, `yyyy-MM-dd`, 오늘 이후 (서비스 검증) | 정지 시작일 (예약 가능) |
+| `startDate` | String | O | `@NotNull`, `yyyy-MM-dd`, 오늘 이후 — 도메인 검증 (03 §3.3 불변식) | 정지 시작일 (예약 가능) |
 | `days` | Integer | O | `@NotNull`, `@Positive` | 정지 일수 |
 
 ```json
@@ -324,6 +354,16 @@
 }
 ```
 
+**판정 순서** (위에서 먼저 걸린 것이 응답)
+
+1. 400 `COMMON_INVALID_INPUT` · 404 `BRANCH_NOT_FOUND` (헤더 · Request 검증 — 컨트롤러 인자 해석 단계)
+2. 404 `MEMBERSHIP_NOT_FOUND` → 403 `BRANCH_FORBIDDEN`
+3. 400 `PAUSE_START_DATE_PAST` → 400 `MEMBERSHIP_INVALID_INPUT` (시작일 > 9999-12-31)
+4. 409 `MEMBERSHIP_NOT_PAUSABLE` (D-28 — 종료일 < 오늘 포함)
+5. 400 `PAUSE_OUT_OF_PERIOD` (D-29 — 만료가 아닌 회원권에서만 판정)
+6. 409 `PAUSE_START_DATE_USED` → `PAUSE_COUNT_LIMIT_EXCEEDED` → `PAUSE_DAYS_LIMIT_EXCEEDED` → `PAUSE_OVERLAPPED`
+7. 400 `MEMBERSHIP_INVALID_INPUT` (연장 후 날짜 범위)
+
 **Errors**
 
 | 상태 | errorCode | 조건 |
@@ -331,7 +371,10 @@
 | 404 | `MEMBERSHIP_NOT_FOUND` | 회원권 없음 (TC-4-11) |
 | 403 | `BRANCH_FORBIDDEN` | 타 지점 회원권 (TC-4-15) |
 | 400 | `PAUSE_START_DATE_PAST` | 시작일이 오늘 이전 (소급 불가, TC-4-09) |
-| 409 | `MEMBERSHIP_NOT_PAUSABLE` | 만료 · 취소된 회원권 (TC-4-05) |
+| 400 | `PAUSE_OUT_OF_PERIOD` | 시작일이 회원권 시작일 앞 · 현재 종료일 뒤 (TC-4-18, D-29) |
+| 400 | `MEMBERSHIP_INVALID_INPUT` | 시작일 > 9999-12-31 · 연장 후 날짜 범위 초과 (상시 결정 — 입력 범위) |
+| 409 | `MEMBERSHIP_NOT_PAUSABLE` | 만료 · 취소 · 횟수제 잔여 0 회원권 (TC-4-05 · TC-4-17, D-28) |
+| 409 | `PAUSE_START_DATE_USED` | 오늘 출입한 회원권의 오늘 시작 정지 (TC-4-19, D-30) |
 | 409 | `PAUSE_COUNT_LIMIT_EXCEEDED` | 시작 전 해제 건을 뺀 4번째 정지 (TC-4-04) |
 | 409 | `PAUSE_DAYS_LIMIT_EXCEEDED` | 누적 일수가 개월당 7일 초과 (TC-4-03) |
 | 409 | `PAUSE_OVERLAPPED` | 기존 정지와 기간 겹침 (TC-4-08) |
@@ -368,7 +411,7 @@
 | 404 | `MEMBERSHIP_NOT_FOUND` | 회원권 없음 |
 | 404 | `PAUSE_NOT_FOUND` | 정지 없음 · 해당 회원권의 정지가 아님 (TC-4-14) |
 | 403 | `BRANCH_FORBIDDEN` | 타 지점 회원권 (TC-4-16) |
-| 409 | `PAUSE_NOT_RELEASABLE` | 이미 해제됐거나 정지 종료일이 지남 (TC-4-10) |
+| 409 | `PAUSE_NOT_RELEASABLE` | 이미 해제됐거나 정지 종료일이 지남 · 회원권이 `EXPIRED` · `CANCELED` · 해제 후 뒤의 미해제 정지가 종료일을 넘어 끝남 (TC-4-10 · TC-4-20, D-29 보충) |
 
 ### API-6. 회원권 목록 조회 · `GET /api/memberships`
 
@@ -382,6 +425,7 @@
   - 생략: 전체
 - 응답의 `status`도 같은 규칙으로 보정한 값이다 (종료일 < 오늘인 `ACTIVE` · `PAUSED` → `EXPIRED`, TC-5-08)
 - 정지 시작 · 종료에 따른 `ACTIVE` ↔ `PAUSED`는 조회에서 보정하지 않는다 — 00:00 상태 동기화 배치가 맞춘다
+- 횟수제 잔여 0도 조회에서 보정하지 않는다 — 00:00 상태 동기화 배치가 `EXPIRED`로 맞춘다 (D-27)
 - 날짜 보정은 00:00 배치가 실패한 날의 안전망이다 — 평소에는 배치가 저장 상태를 맞춰 둔다
 - 인덱스 설계와 보정 조건의 실행 계획은 [03 §6](03-domain-model.md) (NFR-5)
 
@@ -581,16 +625,13 @@
 |---|---|---|
 | 404 | `MEMBERSHIP_NOT_FOUND` | 회원권 없음 |
 | 403 | `BRANCH_FORBIDDEN` | 타 지점 회원권 |
-| 409 | `MEMBERSHIP_NOT_CANCELABLE` | 만료 · 이미 취소된 회원권 (TC-7-04) |
+| 409 | `MEMBERSHIP_NOT_CANCELABLE` | 만료 · 이미 취소 · 횟수제 잔여 0 회원권 (TC-7-04, D-28) |
 
 ---
 
 ## 4. 에러 코드
 
 코드의 `ErrorCode` enum과 1:1로 맞춘다. 새 에러는 여기 먼저 추가하고 코드에 반영한다.
-
-> 현재 `ErrorCode.java`의 공통 4개는 접두 없이 정의되어 있다.
-> 구현 시 아래 `COMMON_` 접두로 이름을 맞춘다.
 
 ### 공통
 
@@ -605,9 +646,10 @@
 
 - 메시지
   - 본문 검증 실패 시 `필드: 사유`
+  - 헤더 오류 시 `X-Branch-Id: 숫자 지점 ID가 필요합니다.`
 - 발생 조건
-  - Bean Validation 실패 (`type`별 조건 필수 포함)
-  - `X-Branch-Id` 헤더 누락 · 숫자 아님 (TC-1-03)
+  - Request Bean Validation 실패 (도메인 검증 실패는 전용 코드, D-22)
+  - `X-Branch-Id` 헤더 누락 · 1~18자리 숫자가 아님 (TC-1-03)
   - 쿼리 파라미터 형식 · 범위 오류
   - 본문 파싱 실패
 
@@ -622,6 +664,7 @@
 
 | errorCode | HTTP | 메시지 | 발생 조건 | 예외 클래스 | API |
 |---|---|---|---|---|---|
+| `MEMBER_INVALID_INPUT` | 400 | 회원 정보가 올바르지 않습니다. | 도메인 생성 · 수정 검증 실패 — 공백 이름 · 형식 오류 연락처 (D-22, TC-2-12) | `MemberException` | API-1 · 9 |
 | `MEMBER_NOT_FOUND` | 404 | 회원을 찾을 수 없습니다. | 회원 ID가 DB에 없음 | `MemberException` | API-2 · 3 · 7 ~ 10 |
 | `MEMBER_PHONE_DUPLICATED` | 409 | 이미 등록된 연락처입니다. | 등록 · 수정 시 다른 회원과 연락처 중복 (선택) | `MemberException` | API-1 · 9 |
 | `MEMBER_HAS_RELATED_DATA` | 409 | 연관 데이터가 있어 삭제할 수 없습니다. | 회원권 · 출입 기록 보유 회원 삭제 (선택) | `MemberException` | API-10 |
@@ -630,10 +673,22 @@
 
 | errorCode | HTTP | 메시지 | 발생 조건 | 예외 클래스 | API |
 |---|---|---|---|---|---|
+| `MEMBERSHIP_INVALID_INPUT` | 400 | 회원권 정보가 올바르지 않습니다. | 도메인 등록 검증 실패 (D-22 · D-23, 아래) | `MembershipException` | API-2 · API-4 |
 | `MEMBERSHIP_NOT_FOUND` | 404 | 회원권을 찾을 수 없습니다. | 회원권 ID가 DB에 없음 | `MembershipException` | API-4 · 5 · 11 |
 | `MEMBERSHIP_ALREADY_ACTIVE` | 409 | 이미 유효한 회원권이 있습니다. | 종료일 ≥ 오늘인 `ACTIVE` · `PAUSED` 회원권 보유 회원의 신규 등록 (D-15 · D-19) | `MembershipException` | API-2 |
-| `MEMBERSHIP_NOT_PAUSABLE` | 409 | 정지할 수 없는 회원권입니다. | 만료(종료일 < 오늘 포함) · 취소된 회원권 정지 요청 | `MembershipException` | API-4 |
-| `MEMBERSHIP_NOT_CANCELABLE` | 409 | 취소할 수 없는 회원권입니다. | 만료(종료일 < 오늘 포함) · 이미 취소된 회원권 취소 요청 (선택) | `MembershipException` | API-11 |
+| `MEMBERSHIP_NOT_PAUSABLE` | 409 | 정지할 수 없는 회원권입니다. | 만료(종료일 < 오늘 · 횟수제 잔여 0 포함, D-28) · 취소된 회원권 정지 요청 | `MembershipException` | API-4 |
+| `MEMBERSHIP_NOT_CANCELABLE` | 409 | 취소할 수 없는 회원권입니다. | 만료(종료일 < 오늘 · 횟수제 잔여 0 포함, D-28) · 이미 취소된 회원권 취소 요청 (선택) | `MembershipException` | API-11 |
+
+`MEMBERSHIP_INVALID_INPUT` 발생 조건 (D-22 · D-23)
+
+- `type`별 필수 값 누락 — 기간제 개월 · 횟수제 횟수 (TC-2-13)
+- 반대 종류 값 — 기간제에 횟수 · 횟수제에 개월 (TC-2-16)
+  - 예외: 반대 종류 값이 0 · 음수면 Request의 `@Positive`가 먼저 막아 `COMMON_INVALID_INPUT`이다
+- 상한 초과 — 개월 > 120 · 횟수 > 1000 (TC-2-14)
+  - 상한 수치는 `application.yml` 정책 값이다 (C-34)
+- 시작일 하한 미만 — 시작일 < 1000-01-01 (TC-2-17, C-33)
+- 종료일 범위 초과 — 계산된 종료일 > 9999-12-31 (TC-2-15)
+- memberId · branchId · startDate · price의 null · 음수, 모르는 type은 도메인 최후 방어선이다 — API로는 Request 검증(`COMMON_INVALID_INPUT`)이 먼저 막는다
 
 ### 정지
 
@@ -641,16 +696,18 @@
 |---|---|---|---|---|---|
 | `PAUSE_NOT_FOUND` | 404 | 정지 내역을 찾을 수 없습니다. | 정지 ID 없음 · 해당 회원권의 정지가 아님 | `MembershipException` | API-5 |
 | `PAUSE_START_DATE_PAST` | 400 | 정지 시작일은 오늘 이후여야 합니다. | 시작일 < 오늘 (소급 정지) | `MembershipException` | API-4 |
+| `PAUSE_OUT_OF_PERIOD` | 400 | 정지 시작일이 회원권 기간 밖입니다. | 시작일 < 회원권 시작일 · 시작일 > 현재 종료일 (D-29) | `MembershipException` | API-4 |
+| `PAUSE_START_DATE_USED` | 409 | 오늘 이미 이용한 회원권은 내일부터 정지할 수 있습니다. | 오늘 출입 기록이 있는 회원권의 오늘 시작 정지 (D-30) | `MembershipException` | API-4 |
 | `PAUSE_COUNT_LIMIT_EXCEEDED` | 409 | 정지 가능 횟수를 초과했습니다. | 시작 전 해제 건을 뺀 4번째 정지 등록 (D-2) | `MembershipException` | API-4 |
-| `PAUSE_DAYS_LIMIT_EXCEEDED` | 409 | 정지 가능 일수를 초과했습니다. | 누적 정지 일수 > 개월 수 × 7일 (D-2, 해제 건은 사용 일수) | `MembershipException` | API-4 |
+| `PAUSE_DAYS_LIMIT_EXCEEDED` | 409 | 정지 가능 일수를 초과했습니다. | 누적 정지 일수 > `months` × 7일 (D-2 · D-24, 해제 건은 사용 일수) | `MembershipException` | API-4 |
 | `PAUSE_OVERLAPPED` | 409 | 기존 정지와 기간이 겹칩니다. | 겹치는 기간의 정지 재등록 | `MembershipException` | API-4 |
-| `PAUSE_NOT_RELEASABLE` | 409 | 해제할 수 없는 정지입니다. | 이미 해제됐거나 종료일이 지난 정지 해제 | `MembershipException` | API-5 |
+| `PAUSE_NOT_RELEASABLE` | 409 | 해제할 수 없는 정지입니다. | 이미 해제됐거나 종료일이 지난 정지 해제 · 회원권이 `EXPIRED` · `CANCELED` · 해제 후 뒤의 미해제 정지가 종료일을 넘어 끝남 (D-29 보충) | `MembershipException` | API-5 |
 
 ### 출입
 
 | errorCode | HTTP | 메시지 | 발생 조건 | 예외 클래스 | API |
 |---|---|---|---|---|---|
-| `ATTENDANCE_NO_VALID_MEMBERSHIP` | 409 | 유효한 회원권이 없습니다. | 회원권 미보유 · 기간 밖 · 만료 · 취소 · 잔여 0 | `AttendanceException` | API-3 |
+| `ATTENDANCE_NO_VALID_MEMBERSHIP` | 409 | 유효한 회원권이 없습니다. | 회원권 미보유 · 기간 밖(시작 전 · 종료 후) · 만료 · 취소 · 잔여 0(오늘 차감 없음) (D-27) | `AttendanceException` | API-3 |
 | `ATTENDANCE_MEMBERSHIP_PAUSED` | 409 | 정지 중인 회원권입니다. | 정지 기간(조기 해제 당일 포함) 중 출입 요청 (FR-4.4) | `AttendanceException` | API-3 |
 
 ### 안내 (배치)

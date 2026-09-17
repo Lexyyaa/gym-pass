@@ -22,6 +22,7 @@ com.gym.pass
 └── support
     ├── config                           설정 빈
     ├── properties                       @ConfigurationProperties
+    ├── web                              @BranchId, BranchIdArgumentResolver, PageResponse
     └── exception                        ErrorResponse, GlobalExceptionHandler
 ```
 
@@ -87,6 +88,9 @@ com.gym.pass
   - `of` — 여러 조각을 조립
     - `Info.of(order, created, warnings)`
 - 요청 검증은 Request의 Bean Validation으로 한다
+- 모든 `/api/**` 핸들러는 `@BranchId Long branchId` 파라미터를 선언한다
+  - 지점 값을 쓰지 않는 API(회원 등록 등)도 선언한다 — 헤더 검증(400 · 404)이 이 파라미터에서만 돈다
+  - 원시 타입 `long`은 쓰지 않는다 — 리졸버가 건너뛰어 검증이 조용히 빠진다
   - 리스트 필드는 `@Valid`까지 붙인다
 - 컨트롤러는 Info를 지역변수로 꺼내지 않고 Response 변환으로 바로 넘긴다
 
@@ -119,7 +123,7 @@ com.gym.pass
   - 상황별 설명이 필요하면 `new OrderException(ErrorCode.X, "설명")`
     - 응답 `message`에 그대로 나간다
   - Bean Validation 실패는 자동 응답된다
-    - `INVALID_INPUT` + `필드: 사유` 메시지
+    - `COMMON_INVALID_INPUT` + `필드: 사유` 메시지
 - 새 에러
   - `docs/design/04-api-spec.md` §4에 먼저 추가
   - → `ErrorCode`

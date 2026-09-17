@@ -6,7 +6,7 @@
 > - API: [04](design/04-api-spec.md)
 >
 
-**현재:** F1 / T1-1
+**현재:** F5 / T5-1
 
 ## 규칙
 
@@ -33,10 +33,10 @@
 | F0 분석 | +0:15 | +0:09 (13:12) |
 | F0 결정 | +0:25 | +0:22 (13:25) — 설계 점검 후 추가 결정 C-19~C-26 포함 시 +1:23 |
 | F0 설계 문서 · 점검 | +1:00 | +1:25 (14:28) |
-| F1 기초 설정 | +1:15 | |
-| F2 회원·회원권 등록 | +1:35 | |
-| F3 출입 | +2:00 | |
-| F4 정지와 연장 | +2:20 | |
+| F1 기초 설정 | +1:15 | +1:39 (14:42) |
+| F2 회원·회원권 등록 | +1:35 | 19:02 (+5:59, 사용량 한도로 15:03~18:21 중단 — 중단 제외 약 +2:41) |
+| F3 출입 | +2:00 | 19:34 (시작 19:09, 소요 약 0:25) |
+| F4 정지와 연장 | +2:20 | 20:26 (시작 19:39, 소요 약 0:47) |
 | F5 조회 | +2:35 | |
 | F6 만료 안내 | +2:45 | |
 | F7 관리 부가 (선택) | — | |
@@ -61,46 +61,52 @@
 
 ## F1. 기초 설정 `feature/setup`
 
-- [ ] T1-1 `feat: 공통 값 객체 및 enum 구현` — 03 §1 · NFR-1 · NFR-9
-- [ ] T1-2 `feat: 도메인 에러 코드 추가` — 04 §4 · NFR-8
-- [ ] T1-3 `feat: Branch 엔티티 및 지점 seed 구현` — 03 §9 branch 행 대조 완료 체크
-- [ ] T1-4 `test: 값 객체 및 지점 헤더 검증 케이스` — TC-1-01 · TC-1-02 · TC-1-03 · TC-1-04
-- [ ] T1-5 `docs: F1 작업 로그`
+- [x] T1-1 `feat: 공통 값 객체 및 enum 구현` — 03 §1 · NFR-1 · NFR-9
+- [x] T1-2 `feat: 도메인 에러 코드 추가` — 04 §4 · NFR-8
+- [x] T1-3 `feat: Branch 엔티티 및 지점 seed 구현` — 03 §9 branch 행 대조 완료 체크
+- [x] T1-4 `test: 값 객체 및 지점 헤더 검증 케이스` — TC-1-01 · TC-1-02 · TC-1-03 · TC-1-04
+- [x] T1-5 `docs: F1 작업 로그`
 
 - T1-1은 지점 헤더 파싱 · 공통 예외 · 페이지 응답을 포함한다 (03 §2 `common`)
 - T1-3은 branch seed만 넣는다 — member · membership seed는 T2-1 (03 §9 투입 시점)
 
 ## F2. 회원·회원권 등록 `feature/registration` — FR-2.1 ~ FR-2.4
 
-- [ ] T2-1 `feat: Member·Membership 애그리거트·종료일 계산 및 seed 구현` — FR-2.1 · FR-2.2 · FR-2.4 · FR-5.5 · 03 §9 member·membership 행 대조 완료 체크
-- [ ] T2-2 `feat: 회원·회원권 등록 API 구현` — FR-2.3 · API-1 · API-2
-- [ ] T2-3 `test: 등록 성공·실패 케이스` — TC-2-01 · TC-2-02 · TC-2-05 · TC-2-07 · TC-2-08 · TC-2-09 · TC-2-11
-- [ ] T2-4 `test: 종료일 계산·재등록 경계 엣지 케이스` — TC-2-03 · TC-2-04 · TC-2-10
-- [ ] T2-5 `test: 동시 등록 방어` — TC-2-06 · NFR-3
-- [ ] T2-6 `test: F2 .http 실행 케이스`
-- [ ] T2-7 `docs: F2 작업 로그`
+- [x] T2-1 `feat: Member·Membership 애그리거트·종료일 계산 및 seed 구현` — FR-2.1 · FR-2.2 · FR-2.4 · FR-5.5 · 03 §9 member·membership 행 대조 완료 체크
+- [x] T2-2 `feat: 회원·회원권 등록 API 구현` — FR-2.3 · API-1 · API-2
+- [x] T2-3 `test: 등록 성공·실패 케이스` — TC-2-01 · TC-2-02 · TC-2-05 · TC-2-07 · TC-2-08 · TC-2-09 · TC-2-11 · TC-2-12 · TC-2-13 · TC-2-14 · TC-2-15 · TC-2-16 · TC-2-17 · TC-2-18
+- [x] T2-4 `test: 종료일 계산·재등록 경계 엣지 케이스` — TC-2-03 · TC-2-04 · TC-2-10
+- [x] T2-5 `test: 동시 등록 방어` — TC-2-06 · NFR-3
+- [x] T2-6 `test: F2 .http 실행 케이스`
+- [x] T2-7 `docs: F2 작업 로그`
 
 - T2-1의 FR-5.5는 `MembershipHistory` 엔티티와 `REGISTERED` 이력까지다 (03 §3.3)
 - T2-1은 member · membership seed를 함께 넣는다 (branch seed는 T1-3)
+- TC-2-14~17은 F2 리뷰 수정(fix 커밋)에서 구현
+- TC-2-18은 기존 테스트에 DisplayName을 붙여 연결한다
+- T2-3은 주입 MockMvc로 API-1 · API-2의 헤더 누락 400 · 없는 지점 404를 한 번 더 확인한다 (F1 리뷰 — `WebConfig` 등록 검증)
 
 ## F3. 출입 `feature/attendance` — FR-3.1 ~ FR-3.4
 
-- [ ] T3-1 `feat: AttendanceRecord 및 출입 판정·차감 구현` — FR-3.2 · FR-3.3 · FR-3.4
-- [ ] T3-2 `feat: 출입 기록 API 구현` — FR-3.1 · API-3 · NFR-4
-- [ ] T3-3 `test: 출입 성공·실패 케이스` — TC-3-01 · TC-3-02 · TC-3-04 · TC-3-08
-- [ ] T3-4 `test: 출입 경계 엣지 케이스` — TC-3-03 · TC-3-05 · TC-3-06
-- [ ] T3-5 `test: 동시 출입 하루 1회 차감` — TC-3-07 · NFR-2 · NFR-4
-- [ ] T3-6 `test: F3 .http 실행 케이스`
-- [ ] T3-7 `docs: F3 작업 로그`
+- [x] T3-1 `feat: AttendanceRecord 및 출입 판정·차감 구현` — FR-3.2 · FR-3.3 · FR-3.4
+- [x] T3-2 `feat: 출입 기록 API 구현` — FR-3.1 · API-3 · NFR-4
+- [x] T3-3 `test: 출입 성공·실패 케이스` — TC-3-01 · TC-3-02 · TC-3-04 · TC-3-08 · TC-3-09
+- [x] T3-4 `test: 출입 경계 엣지 케이스` — TC-3-03 · TC-3-05 · TC-3-06 · TC-3-10
+- [x] T3-5 `test: 동시 출입 하루 1회 차감` — TC-3-07 · NFR-2 · NFR-4
+- [x] T3-6 `test: F3 .http 실행 케이스`
+- [x] T3-7 `docs: F3 작업 로그`
 
 ## F4. 정지와 연장 `feature/pause` — FR-4.1 ~ FR-4.4
 
-- [ ] T4-1 `feat: MembershipPause 및 상한·겹침·연장 규칙 구현` — FR-4.1 · FR-4.2 · FR-4.3
-- [ ] T4-2 `feat: 정지 등록·조기 해제 API 구현` — API-4 · API-5
-- [ ] T4-3 `test: 정지 성공·실패 케이스` — TC-4-01 · TC-4-03 · TC-4-04 · TC-4-05 · TC-4-06 · TC-4-08 · TC-4-09 · TC-4-10 · TC-4-11 · TC-4-14 · TC-4-15 · TC-4-16 · FR-4.4
-- [ ] T4-4 `test: 정지 연장·해제 엣지 케이스` — TC-4-02 · TC-4-07 · TC-4-12 · TC-4-13
-- [ ] T4-5 `test: F4 .http 실행 케이스`
-- [ ] T4-6 `docs: F4 작업 로그`
+- [x] T4-1 `feat: MembershipPause 및 상한·겹침·연장 규칙 구현` — FR-4.1 · FR-4.2 · FR-4.3
+- [x] T4-2 `feat: 정지 등록·조기 해제 API 구현` — API-4 · API-5
+- [x] T4-3 `test: 정지 성공·실패 케이스` — TC-4-01 · TC-4-03 · TC-4-04 · TC-4-05 · TC-4-06 · TC-4-08 · TC-4-09 · TC-4-10 · TC-4-11 · TC-4-14 · TC-4-15 · TC-4-16 · TC-4-17 · TC-4-18 · TC-4-19 · TC-4-20 · FR-4.4
+- [x] T4-4 `test: 정지 연장·해제 엣지 케이스` — TC-4-02 · TC-4-07 · TC-4-12 · TC-4-13
+- [x] T4-5 `test: F4 .http 실행 케이스`
+- [x] T4-6 `docs: F4 작업 로그`
+
+- 잔여 0인 횟수제는 정지 거부 (D-28, TC-4-17) — T4-3에 포함
+- TC-4-18 · TC-4-19 · TC-4-20(D-29 · D-30 · D-29 보충)는 F4 리뷰 수정(fix 커밋)에서 구현
 
 ## F5. 조회 `feature/query` — FR-5.1 ~ FR-5.6
 
@@ -109,12 +115,13 @@
 - [ ] T5-3 `feat: 회원권 상태 동기화 배치 구현` — FR-5.6
 - [ ] T5-4 `test: 조회 성공·실패 케이스` — TC-5-01 · TC-5-02 · TC-5-03 · TC-5-04 · NFR-1
 - [ ] T5-5 `test: 목록 쿼리 실행 계획 검증` — TC-5-05 · NFR-5
-- [ ] T5-6 `test: 상태 동기화 경계·멱등 및 날짜 보정 케이스` — TC-5-06 · TC-5-07 · TC-5-08 · TC-5-09
+- [ ] T5-6 `test: 상태 동기화 경계·멱등 및 날짜 보정 케이스` — TC-5-06 · TC-5-07 · TC-5-08 · TC-5-09 · TC-5-10
 - [ ] T5-7 `test: F5 .http 실행 케이스`
 - [ ] T5-8 `docs: F5 작업 로그`
 
 - T5-1의 날짜 보정은 상태 필터 조건과 응답 상태 보정이다 (D-21, 04 API-6)
-- T5-3은 00:00 KST cron과 3단계 bulk UPDATE다 (03 §5)
+- T5-3은 00:00 KST cron과 4단계 bulk UPDATE다 (03 §5)
+  - 2단계(횟수제 잔여 0 → `EXPIRED`)는 D-27로 추가됐다
 - 재점검(N-1)으로 T5-3 · T5-6이 추가돼 기존 T5-3~T5-6을 T5-4 · T5-5 · T5-7 · T5-8로 다시 매겼다
 
 ## F6. 만료 안내 `feature/notification` — FR-6.1 ~ FR-6.6
@@ -151,6 +158,47 @@
   - `docker` 프로파일 — datasource url의 호스트를 mysql 서비스명으로
 - 재점검(N-9)으로 T9-1이 추가돼 기존 T9-1~T9-3을 T9-2~T9-4로 다시 매겼다
 - SUB-9(저장소 제출)는 F9 완료 후 푸시로 충족한다
+
+---
+
+## 리뷰 백로그
+
+기능별 리뷰·검증에서 나온 중간 · 낮음 지적을 쌓는다.
+결정 없이 적기만 하고, `/wrap-up`에서 한 번에 처리한다 (문서 쪽은 일괄 수정, 코드 쪽은 사용자에게 묻고 fix 또는 README 한계).
+
+| F | 출처 | 심각도 | 쪽 | 내용 | 처리 |
+|---|---|---|---|---|---|
+| F2 | reviewer | 낮음 | 테스트 | 성격이 다른 테스트 3개가 TC-2-14 · TC-2-17 ID를 같이 쓴다 (설정 바인딩 · 넘겨받은 상한 · 하한 경계 성공) | |
+| F2 | verifier | 낮음 | 문서 | 시작일 > 9999-12-31 사전 검사(`plusMonths` 예외 방지)가 D-23 · 03 §3.3 · 04 §4에 따로 적혀 있지 않다 | |
+| F2 | verifier | 낮음 | 문서 | 04 §4 `MEMBERSHIP_INVALID_INPUT` "null · 음수" 문구가 모호하다 (음수 검사는 price만) | |
+| F2 | verifier | 낮음 | 문서 | 입력 검증이 member 락보다 먼저 돈다 — 없는 회원 + 잘못된 입력이면 400. 우선순위가 03 §5에 없다 | |
+| F2 | verifier | 낮음 | 테스트 | "서비스가 설정값을 도메인에 넘긴다" 연결을 검증하는 테스트가 없다 | |
+| F2 | verifier | 낮음 | 문서 | 02 TC-2-07 행에 에러 코드 표기가 없다 (API는 `COMMON_`, 도메인은 `MEMBERSHIP_`) | |
+| F2 | reviewer | 낮음 | 코드 | 저장 직후 `MembershipHistory.membershipId`가 메모리에서 null (`insertable = false`) — F4 이후 응답에 쓸 때 주의 | |
+| F3 | verifier | 중간 | 테스트 | NFR-4(기록 · 차감 원자성)의 롤백 케이스가 없다 — 차감 뒤 기록 저장 실패 시 잔여가 되돌아가는지 미검증 | |
+| F3 | verifier | 낮음 | 테스트 | TC-3-09 · TC-3-10 테스트에 ID가 없다 (task_list는 [x]) · TC-3-09의 "기록 0건" 단언이 항상 참 (`Long.MAX_VALUE`로 필터) | |
+| F3 | reviewer | 낮음 | 테스트 | TC ID 없는 테스트 다수 (헤더 누락 · memberId null · 오늘/어제 차감 · 기간제 차감 noop · verifyBranch · 스키마) — 02 TC 표 추가 후보 | |
+| F3 | reviewer | 낮음 | 테스트 | `deductedToday = true`로 상태 검사를 우회하지 않는지 EXPIRED · CANCELED 케이스가 없다 (기간 밖만 검증) | |
+| F3 | verifier | 낮음 | 테스트 | TC-3-06 "다음 날 거부"가 연속 시나리오가 아니라 전날 기록을 직접 INSERT해 흉내 낸다 | |
+| F3 | verifier | 낮음 | 테스트 | "출입 후보 항상 1건 이하" 전제를 깨는 데이터에서 `Optional` 조회가 500이 되는지 검증 없음 (API로는 도달 불가) | |
+| F3 | verifier | 낮음 | 테스트 | 출입 테스트가 시스템 시계 기준이라 자정 전후 실행 시 흔들릴 수 있다 | |
+| F3 | reviewer | 낮음 | 코드 | `AttendanceService.java:41` · `Membership.java:126` 주석 근거가 부정확 — 정합성 근거는 membership 락이 아니라 member 락 뒤 스냅샷 | |
+| F3 | verifier | 낮음 | 문서 | 03 §3.3 `deduct` 실패 조건에 "기간 밖"이 없다 (코드는 `validateEntry(today, false)`로 거부) | |
+| F3 | verifier | 낮음 | 문서 | 03 §7 · §8 흐름에 "membership 락 뒤 후보 조건 재검증(409)" 단계가 없다 | |
+| F3 | verifier | 낮음 | 문서 | 03 §3.4에 출입 시각 초 단위 절삭이 적혀 있지 않다 | |
+| F3 | verifier | 낮음 | 문서 | 04 API-3 Errors 표의 403 조건 "유효 회원권이 타 지점 소속" ↔ 판정 순서 "판정 대상이 타 지점" 표현이 다르다 | |
+| F4 | verifier | 중간 | 테스트 | 정지 동시성 TC가 02에 없다 (`MembershipPauseConcurrencyTest` 2건 ID 없음) · 정지↔해제, 해제↔해제, 출입↔오늘 시작 정지 동시 요청 미검증 | |
+| F4 | verifier | 중간 | 문서 | 03 §7 표에 정지 · 해제 행이 없고, 트랜잭션 밖 memberId 조회 + REQUIRES_NEW 흐름이 03 §7 · D-26에 없다 | |
+| F4 | verifier | 중간 | 문서 | 02 FR-4 규칙 목록에 D-28(잔여 0) · D-29 · D-30이 반영되지 않았다 | |
+| F4 | verifier | 중간 | 문서 | 03 §3.3 불가 목록 · §4 전이 표에 "종결 상태 해제 금지"가 명시되어 있지 않다 (04 API-5가 03 §4를 근거로 든다) | |
+| F4 | verifier | 낮음 | 문서 | 03 §3.3 `pause` · `releasePause` 시그니처(상한 · enteredToday 인자, 반환값)와 D-29 보충 참조가 코드와 다르다 · 03 §5에 `MembershipPauseService` · `MembershipPauseLimits` · `MembershipPauseResult` 없음 | |
+| F4 | verifier | 낮음 | 문서 | 03 §6 NOT NULL 표에 `membership_pause` 행이 없다 · 04 API-4 관련 줄에 TC-4-17, API-5 관련 줄에 TC-4-20 없음 · 04 API-5 판정 순서 절 없음 | |
+| F4 | verifier | 낮음 | 문서 | 02 TC-4-10 · TC-4-20 행에 에러 코드 · 경계(끝 = 새 종료일 허용)가 적혀 있지 않다 · D-29 "남는 한계"가 등록 시점 얘기인데 해제에도 해당하는 것처럼 읽힌다 · D-29 · D-30이 D-28 앞에 있다 | |
+| F4 | reviewer | 낮음 | 테스트 | TC-4-11이 테이블 전체 건수로 "저장 0건"을 단언 (병렬 실행 시 흔들림) · TC-4-12 "다음 날"을 행 직접 INSERT로 흉내 | |
+| F4 | reviewer | 낮음 | 테스트 | 판정 순서 5→6(OUT_OF_PERIOD → START_DATE_USED) · 6단계 안(START_DATE_USED → COUNT) 테스트 없음 · API 종결 상태 해제는 EXPIRED만 | |
+| F4 | reviewer | 낮음 | 테스트 | TC-4-10 · TC-4-18 · TC-4-19 ID에 성격이 다른 테스트(종료일 지난 정지 · 종결 상태 해제 · 늘어난 종료일 경계 · 판정 순서)가 묶여 있다 · 도메인 TC-4-20 테스트 이름이 "시작일" 기준 표기 | |
+| F4 | reviewer | 낮음 | 코드 | `Membership.memberId`에 `updatable = false`가 없다 (트랜잭션 밖 memberId 조회의 안전 근거) · `Membership.java:229` 주석에 불변식(미해제 정지 끝 ≤ 회원권 종료일) 전제가 빠짐 | |
+| F4 | verifier | 낮음 | 테스트 | `http/pause.http`는 실행일 2026-09-17 기준 날짜로 고정 — 다른 날 실행 시 기대값 어긋남 (registration · attendance도 동일) | |
 
 ---
 
