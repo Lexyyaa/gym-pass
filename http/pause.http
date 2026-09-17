@@ -357,3 +357,71 @@ Content-Type: application/json
 X-Branch-Id: 2
 
 { "startDate": "+10000-01-01", "days": 2 }
+
+### [TC-4-20-준비] 해제 순서 검증용 회원 등록
+# @expect 201
+POST {{host}}/api/members
+Content-Type: application/json
+X-Branch-Id: 1
+
+{ "name": "노하진", "phone": "010-9300-0004" }
+
+### [TC-4-20-준비2] 오늘 시작 기간제 1개월 (종료일 2026-10-17)
+# @uses orderMemberId = [TC-4-20-준비].$.memberId
+# @expect 201
+# @expect $.endDate == "2026-10-17"
+POST {{host}}/api/memberships
+Content-Type: application/json
+X-Branch-Id: 1
+
+{ "memberId": {{orderMemberId}}, "type": "PERIOD", "startDate": "2026-09-17", "months": 1, "paymentAmount": 100000 }
+
+### [TC-4-20-정지A] 9/18부터 3일 → 종료일 10/20
+# @uses orderMembershipId = [TC-4-20-준비2].$.membershipId
+# @expect 200
+# @expect $.membershipEndDate == "2026-10-20"
+POST {{host}}/api/memberships/{{orderMembershipId}}/pauses
+Content-Type: application/json
+X-Branch-Id: 1
+
+{ "startDate": "2026-09-18", "days": 3 }
+
+### [TC-4-20-정지B] 늘어난 종료일(10/20)에 시작하는 1일 → 종료일 10/21
+# @uses orderMembershipId = [TC-4-20-준비2].$.membershipId
+# @expect 200
+# @expect $.membershipEndDate == "2026-10-21"
+POST {{host}}/api/memberships/{{orderMembershipId}}/pauses
+Content-Type: application/json
+X-Branch-Id: 1
+
+{ "startDate": "2026-10-20", "days": 1 }
+
+### [TC-4-20] A를 먼저 해제하면 B가 종료일(10/18) 밖에 남음 → 409, 종료일 · A 해제일 불변
+# @uses orderMembershipId = [TC-4-20-준비2].$.membershipId
+# @uses pauseAId = [TC-4-20-정지A].$.pauseId
+# @expect 409
+# @expect $.errorCode == "PAUSE_NOT_RELEASABLE"
+# @db SELECT end_date FROM membership WHERE id = {{orderMembershipId}} => 2026-10-21
+# @db SELECT released_date IS NULL FROM membership_pause WHERE id = {{pauseAId}} => 1
+POST {{host}}/api/memberships/{{orderMembershipId}}/pauses/{{pauseAId}}/release
+X-Branch-Id: 1
+
+### [TC-4-20-B먼저] B를 먼저 해제 → 사용 0일, 종료일 10/20
+# @uses orderMembershipId = [TC-4-20-준비2].$.membershipId
+# @uses pauseBId = [TC-4-20-정지B].$.pauseId
+# @expect 200
+# @expect $.usedDays == 0
+# @expect $.membershipEndDate == "2026-10-20"
+POST {{host}}/api/memberships/{{orderMembershipId}}/pauses/{{pauseBId}}/release
+X-Branch-Id: 1
+
+### [TC-4-20-A다음] 이어서 A 해제 → 사용 0일, 종료일 원래 값 10/17
+# @uses orderMembershipId = [TC-4-20-준비2].$.membershipId
+# @uses pauseAId = [TC-4-20-정지A].$.pauseId
+# @expect 200
+# @expect $.usedDays == 0
+# @expect $.membershipEndDate == "2026-10-17"
+# @db SELECT end_date FROM membership WHERE id = {{orderMembershipId}} => 2026-10-17
+# @db SELECT COUNT(*) FROM membership_history WHERE membership_id = {{orderMembershipId}} AND event_type = 'RESUMED' => 2
+POST {{host}}/api/memberships/{{orderMembershipId}}/pauses/{{pauseAId}}/release
+X-Branch-Id: 1
