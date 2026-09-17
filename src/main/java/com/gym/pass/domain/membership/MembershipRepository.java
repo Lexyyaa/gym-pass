@@ -16,6 +16,15 @@ public interface MembershipRepository {
      */
     Optional<Long> findValidIdByMemberId(Long memberId, LocalDate today);
 
+    /**
+     * 회원권의 회원 id만 조회한다. 없으면 MEMBERSHIP_NOT_FOUND.
+     * 엔티티를 영속성 컨텍스트에 올리지 않는다. 락 트랜잭션 밖에서 불러 D-26 1번(member 락)이 첫 쿼리가 되게 한다.
+     */
+    Long getMemberIdById(Long id);
+
+    /** 변경을 즉시 DB에 반영한다. 새로 추가한 하위 엔티티(정지)의 id를 채울 때 쓴다. */
+    void flush();
+
     /** membership 행 비관적 락(PK FOR UPDATE). 없으면 MEMBERSHIP_NOT_FOUND (D-26 2번). */
     Membership getByIdForUpdate(Long id);
 }

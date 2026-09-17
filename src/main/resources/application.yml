@@ -31,6 +31,10 @@ gym:
     # 기간제 개월 수 · 횟수제 이용 횟수 상한 (C-28 · C-34 · D-23)
     max-months: 120
     max-count: 1000
+    # 정지 상한: 회원권당 최대 횟수 · 개월당 누적 일수 (D-2 · D-24)
+    pause:
+      max-count: 3
+      days-per-month: 7
 
 management:
   endpoints:

@@ -37,9 +37,21 @@ public class MembershipRepositoryImpl implements MembershipRepository {
     }
 
     @Override
+    public Long getMemberIdById(Long id) {
+        return membershipJpaRepository.findMemberIdById(id).orElseThrow(MembershipRepositoryImpl::notFound);
+    }
+
+    @Override
+    public void flush() {
+        membershipJpaRepository.flush();
+    }
+
+    @Override
     public Membership getByIdForUpdate(Long id) {
-        return membershipJpaRepository
-                .findByIdForUpdate(id)
-                .orElseThrow(() -> new MembershipException(ErrorCode.MEMBERSHIP_NOT_FOUND));
+        return membershipJpaRepository.findByIdForUpdate(id).orElseThrow(MembershipRepositoryImpl::notFound);
+    }
+
+    private static MembershipException notFound() {
+        return new MembershipException(ErrorCode.MEMBERSHIP_NOT_FOUND);
     }
 }

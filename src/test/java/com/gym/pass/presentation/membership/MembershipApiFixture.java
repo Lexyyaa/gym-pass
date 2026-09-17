@@ -81,6 +81,8 @@ class MembershipApiFixture {
     void cleanUp() {
         String memberIds = "SELECT id FROM member WHERE phone LIKE '" + phonePrefix + "%'";
         jdbcTemplate.update("DELETE FROM membership_history WHERE member_id IN (" + memberIds + ")");
+        jdbcTemplate.update("DELETE FROM membership_pause WHERE membership_id IN"
+                + " (SELECT id FROM membership WHERE member_id IN (" + memberIds + "))");
         jdbcTemplate.update("DELETE FROM membership WHERE member_id IN (" + memberIds + ")");
         jdbcTemplate.update("DELETE FROM member WHERE phone LIKE ?", phonePrefix + "%");
         jdbcTemplate.update("DELETE FROM branch WHERE id = ?", branchId);
