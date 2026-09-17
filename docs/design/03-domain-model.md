@@ -70,6 +70,7 @@
 | `common` | — | 공유 VO·Enum | ErrorCode · 공통 예외 (지점 헤더 파싱 · 페이지 응답은 `support/web` — domain은 웹 계층을 참조하지 않는다) | NFR-1 · NFR-8 |
 
 - 애그리거트 간에는 객체가 아니라 식별자(`memberId` · `membershipId` · `branchId`)로 참조한다
+  - DB에도 물리 FK를 걸지 않는다 (D-25, §6)
 - FR-2.4(종류 추가 구조)는 `MembershipType`별 정책(종료일 계산 · 차감 여부)을 enum 메서드로 분리해 충족한다
   - 새 종류 추가 = enum 값과 정책 메서드 구현 추가, 출입 · 안내 · 조회 로직은 수정 없음
 
@@ -100,7 +101,7 @@
 | `update(name, phone)` | 이름 · 연락처 수정 | `MEMBER_INVALID_INPUT` 400 (D-22) | FR-7.1 |
 
 **불변식** (서비스의 if문이 아니라 이 애그리거트가 스스로 지킨다)
-- 이름은 빈 값이 아니다
+- 이름은 빈 값이 아니고 50자 이하다 ([04 API-1](04-api-spec.md)과 일치)
 - 연락처는 `Phone` 형식(숫자 · 하이픈)을 만족한다 (TC-1-01 · TC-1-02)
 
 ### 3.3 `Membership`
@@ -110,6 +111,7 @@
 - `memberId` · `branchId`
 - `type` (`MembershipType`) · `status` (`MembershipStatus`)
 - `startDate` · `endDate`
+- `months` (개월 수, NOT NULL — 기간제 = 요청 개월, 횟수제 = 6, D-24)
 - `totalCount` · `remainingCount` (횟수제만, 기간제는 null)
 - `price`
 - `pauses` (`List<MembershipPause>`)
@@ -118,18 +120,30 @@
 
 | 메서드 | 하는 일 | 실패 시 | 관련 FR |
 |---|---|---|---|
-| `register(...)` | 종료일 계산(기간제 `plusMonths(개월)`, 횟수제 `plusMonths(6)`) 후 ACTIVE 생성 | `MEMBERSHIP_INVALID_INPUT` 400 (D-22) | FR-2.2 · FR-2.4 |
+| `register(...)` | 입력 규칙 검사 · 종료일 계산 · `months` 저장 후 ACTIVE 생성 | `MEMBERSHIP_INVALID_INPUT` 400 (D-22 · D-23) | FR-2.2 · FR-2.4 |
 | `validateEntry(today)` | 날짜 · 유효 정지 구간 · 잔여를 직접 검사해 출입 가능 판정 | `ATTENDANCE_` 계열 409 | FR-3.2 · FR-4.4 |
 | `deduct(today)` | 횟수제 잔여 1 차감 + `DEDUCTED` 이력, 잔여 0 도달 시 EXPIRED 전이 | `MEMBERSHIP_` 계열 4xx | FR-3.3 |
 | `pause(startDate, days, today)` | 상한 · 겹침 · 상태 검사 후 정지 등록, 종료일 += days, `PAUSED` 이력, 시작일 = 오늘이면 PAUSED 전이 | `PAUSE_` 계열 4xx | FR-4.1~4.3 |
 | `releasePause(pauseId, today)` | 조기 해제, 미사용 일수만큼 종료일 되돌림, `RESUMED` 이력, 상태 재판정(§4) | `PAUSE_` 계열 4xx | FR-4.2 |
 | `cancel(today)` | ACTIVE · PAUSED에서만 CANCELED 전이, `CANCELED` 이력 | `MEMBERSHIP_` 계열 4xx | FR-7.4 |
 
+- `register(...)` 종료일 계산
+  - 기간제: `plusMonths(개월)` (D-6)
+  - 횟수제: `plusMonths(6)` — 6은 `MembershipType` enum 상수 (D-7 보충)
+- `register(...)` 입력 규칙 (D-22 · D-23) — 위반은 모두 `MEMBERSHIP_INVALID_INPUT`
+  - `type`별 필수 값 누락 (기간제 개월 · 횟수제 횟수)
+  - 반대 종류 값 (기간제에 횟수 · 횟수제에 개월)
+  - 개월 > 120 · 횟수 > 1000
+  - 계산된 종료일 > 9999-12-31
+
 **불변식** (서비스의 if문이 아니라 이 애그리거트가 스스로 지킨다)
 - `endDate ≥ startDate`
-- 기간(개월) · 횟수는 1 이상, `price ≥ 0` (FR-2.2 상세 정책)
+- `endDate ≤ 9999-12-31` (D-23)
+- 기간(개월)은 1 ~ 120, 횟수는 1 ~ 1000, `price ≥ 0` (FR-2.2 상세 정책 · D-23)
+- `months`는 항상 값이 있다 — 기간제 = 요청 개월, 횟수제 = 6 (D-24)
+- 기간제는 횟수 값을, 횟수제는 요청 개월 값을 받지 않는다 (D-23)
 - 횟수제 `remainingCount ≥ 0`, 기간제는 null
-- 정지 횟수 ≤ 3회, 누적 정지 일수 ≤ 개월 수 × 7일, 1회 최소 1일 (D-2, 계산 기준은 아래 `MembershipPause`)
+- 정지 횟수 ≤ 3회, 누적 정지 일수 ≤ `months` × 7일, 1회 최소 1일 (D-2 · D-24, 계산 기준은 아래 `MembershipPause`)
 - 정지 기간은 서로 겹치지 않는다 (FR-4.1 상세 정책)
   - 겹침은 유효 정지 구간(아래)으로 판정한다
 - 정지 시작일은 오늘 이후만 허용한다
@@ -275,6 +289,10 @@ stateDiagram-v2
 | `MembershipStatusSyncBatch` | `membership` | 00:00 조건부 bulk UPDATE 3단계 (만료 → 정지 종료 → 정지 시작) | FR-5.6 |
 | `MembershipType`별 정책 | `membership` | 종료일 계산(D-6 · D-7) · 차감 대상 여부 분기 (다형성 지점) | FR-2.4 |
 
+- 횟수제 유효기간 6개월은 `MembershipType`의 enum 상수다 (D-7 보충, C-32)
+  - `src/main/CLAUDE.md`의 "정책 값은 설정으로" 규칙의 예외다
+  - 종류의 정의이고, `months` 컬럼(D-24)에 저장되므로 값이 바뀌어도 기존 회원권에 영향이 없다
+
 **`MembershipStatusSyncBatch` 단계** (D-21, 매일 00:00 KST)
 
 | 순서 | 전이 | 대상 조건 | 사용 인덱스 |
@@ -315,12 +333,13 @@ erDiagram
     }
     MEMBERSHIP {
         bigint id PK
-        bigint member_id FK
-        bigint branch_id FK
+        bigint member_id FK "논리 참조"
+        bigint branch_id FK "논리 참조"
         varchar type
         varchar status
         date start_date
         date end_date
+        int months
         int total_count
         int remaining_count
         bigint price
@@ -329,7 +348,7 @@ erDiagram
     }
     MEMBERSHIP_PAUSE {
         bigint id PK
-        bigint membership_id FK
+        bigint membership_id FK "물리 FK"
         date start_date
         date end_date
         date released_date
@@ -337,18 +356,18 @@ erDiagram
     }
     ATTENDANCE_RECORD {
         bigint id PK
-        bigint member_id FK
-        bigint membership_id FK
-        bigint branch_id FK
+        bigint member_id FK "논리 참조"
+        bigint membership_id FK "논리 참조"
+        bigint branch_id FK "논리 참조"
         datetime entry_at
         date entry_date
         boolean deducted
     }
     MEMBERSHIP_HISTORY {
         bigint id PK
-        bigint membership_id FK
-        bigint member_id
-        bigint branch_id
+        bigint membership_id FK "물리 FK"
+        bigint member_id "논리 참조"
+        bigint branch_id "논리 참조"
         varchar event_type
         date end_date_before
         date end_date_after
@@ -358,7 +377,7 @@ erDiagram
     }
     NOTIFICATION_RECORD {
         bigint id PK
-        bigint membership_id FK
+        bigint membership_id FK "논리 참조"
         varchar type
         date base_date
         varchar status
@@ -368,6 +387,8 @@ erDiagram
     }
 ```
 
+- 참조 구분 (D-25): 애그리거트 간 참조(`"논리 참조"`)는 물리 FK 없이 식별자만 두고, 같은 애그리거트 안의 참조(`"물리 FK"` — `membership_pause` · `membership_history`의 `membership_id`)만 JPA 연관으로 물리 FK가 생긴다
+- `membership.months` = 개월 수 (기간제 = 요청 개월, 횟수제 = 6) — 정지 누적 상한 계산에 쓴다 (D-24 · D-2)
 - `membership.price` = API 표면의 `paymentAmount` ([04 API-2](04-api-spec.md)) — DB · 도메인은 `price`, 요청 · 응답 필드는 `paymentAmount`로 고정
 
 **제약 · 인덱스**
@@ -386,8 +407,9 @@ erDiagram
 | `membership_history` | INDEX | `(member_id, branch_id, created_at)` | 지점 귀속 변경 이력 최신순 조회 (FR-5.4 · NFR-1) |
 | `notification_record` | INDEX | `(status, attempt_count)` | 실패 건(`FAILED`, 시도<3) 재시도 대상 조회 (FR-6.4) |
 | `member` | NOT NULL | `name` · `phone` | FR-2.1 필수 입력 |
-| `membership` | NOT NULL | `member_id` · `branch_id` · `type` · `status` · `start_date` · `end_date` · `price` | 유효 판정 · 지점 격리의 기준 컬럼 |
+| `membership` | NOT NULL | `member_id` · `branch_id` · `type` · `status` · `start_date` · `end_date` · `months` · `price` | 유효 판정 · 지점 격리 · 정지 상한의 기준 컬럼 (D-24) |
 | `attendance_record` | NOT NULL | 전 컬럼 | 이력 무결성 (FR-3.1) |
+| `membership_history` | NOT NULL | `membership_id` · `member_id` · `branch_id` · `event_type` · `created_at` | 이력 무결성 · 지점 귀속 조회 (FR-5.5) |
 | `member` | UNIQUE(F7 구현 시) | `phone` | 연락처 중복 거부 (FR-7.3) — F7 착수 전에는 걸지 않는다 |
 
 **인덱스 설계 근거 (목록 조회 실행 계획 대비, NFR-5 · TC-5-05)**
@@ -424,6 +446,7 @@ erDiagram
 **선택 근거**
 - "유효 회원권 1개"는 상태 · 날짜 조건부 제약이라 MySQL UNIQUE로 표현할 수 없다
   - 부모(member) 행 락으로 검사-삽입 구간을 직렬화한다 — 이것이 02의 "DB 수준 방어"다
+  - 락 조회를 트랜잭션의 첫 쿼리로 둔다. REPEATABLE READ 스냅샷이 첫 일반 조회 시점에 잡히므로, 락 앞에 일반 SELECT가 있으면 먼저 커밋된 등록을 못 본다.
 - 차감 판정도 조건부(오늘 첫 출입)라 조건부 UPDATE보다 락 + 검사가 단순하다
   - 두 락 모두 PK 등호 조회라 잠금 범위가 1행이다 (인덱스 필수 조건 충족)
 - 출입 판정 대상 회원권은 항상 1건 이하다
@@ -487,10 +510,10 @@ sequenceDiagram
 |---|---|---|
 | branch 1~2 | 지점 이름만 (`강남점` · `잠실점`) | 헤더 식별 · 지점 격리 데모 |
 | member 1~4 | 이름 · 연락처만 (전사 공유, D-10) | 등록 · 출입 데모 |
-| membership 1 | 회원 1 · 지점 1 · 기간제 · ACTIVE | 출입 · 목록 데모 |
-| membership 2 | 회원 2 · 지점 1 · 횟수제(잔여 10) · ACTIVE | 차감 데모 |
-| membership 3 | 회원 3 · 지점 1 · 기간제 · EXPIRED | 상태 필터 · 출입 거부 데모 |
-| membership 4 | 회원 4 · 지점 2 · 기간제 · ACTIVE | 지점 격리(403) 데모 |
+| membership 1 | 회원 1 · 지점 1 · 기간제 · `months` 12 · ACTIVE | 출입 · 목록 데모 |
+| membership 2 | 회원 2 · 지점 1 · 횟수제(잔여 10) · `months` 6 · ACTIVE | 차감 데모 |
+| membership 3 | 회원 3 · 지점 1 · 기간제 · `months` 3 · EXPIRED | 상태 필터 · 출입 거부 데모 |
+| membership 4 | 회원 4 · 지점 2 · 기간제 · `months` 12 · ACTIVE | 지점 격리(403) 데모 |
 
 - 회원 배정은 1인 1 유효권(FR-2.3 · D-15 · D-19)을 지킨다
   - 종료일 ≥ 오늘인 `ACTIVE` · `PAUSED` 회원권은 회원당 최대 1건 (회원 1 · 2 · 4가 각 1건)
