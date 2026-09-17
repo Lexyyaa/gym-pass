@@ -38,6 +38,8 @@ public enum ErrorCode {
     // 정지
     PAUSE_NOT_FOUND(HttpStatus.NOT_FOUND, "정지 내역을 찾을 수 없습니다."),
     PAUSE_START_DATE_PAST(HttpStatus.BAD_REQUEST, "정지 시작일은 오늘 이후여야 합니다."),
+    PAUSE_OUT_OF_PERIOD(HttpStatus.BAD_REQUEST, "정지 시작일이 회원권 기간 밖입니다."),
+    PAUSE_START_DATE_USED(HttpStatus.CONFLICT, "오늘 이미 이용한 회원권은 내일부터 정지할 수 있습니다."),
     PAUSE_COUNT_LIMIT_EXCEEDED(HttpStatus.CONFLICT, "정지 가능 횟수를 초과했습니다."),
     PAUSE_DAYS_LIMIT_EXCEEDED(HttpStatus.CONFLICT, "정지 가능 일수를 초과했습니다."),
     PAUSE_OVERLAPPED(HttpStatus.CONFLICT, "기존 정지와 기간이 겹칩니다."),

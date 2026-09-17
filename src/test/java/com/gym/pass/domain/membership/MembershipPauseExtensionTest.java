@@ -53,7 +53,7 @@ class MembershipPauseExtensionTest {
         assertThat(membership.getEndDate()).isEqualTo(expectedMembershipEnd);
 
         // when
-        MembershipPause pause = membership.pause(pauseStart, days, pauseStart, PAUSE_LIMITS);
+        MembershipPause pause = membership.pause(pauseStart, days, pauseStart, false, PAUSE_LIMITS);
 
         // then
         assertThat(pause.getEndDate()).isEqualTo(expectedPauseEnd);
@@ -85,7 +85,7 @@ class MembershipPauseExtensionTest {
         // given — 정지 시작 전날 등록
         Membership membership = period(membershipStart, 3);
         LocalDate originalEnd = membership.getEndDate();
-        MembershipPause pause = membership.pause(pauseStart, days, pauseStart.minusDays(1), PAUSE_LIMITS);
+        MembershipPause pause = membership.pause(pauseStart, days, pauseStart.minusDays(1), false, PAUSE_LIMITS);
         assignId(pause, 1L);
 
         // when
@@ -105,7 +105,7 @@ class MembershipPauseExtensionTest {
         LocalDate start = LocalDate.of(2026, 9, 17);
         Membership membership = period(start, 3);
         LocalDate originalEnd = membership.getEndDate();
-        MembershipPause pause = membership.pause(start, 7, start, PAUSE_LIMITS);
+        MembershipPause pause = membership.pause(start, 7, start, false, PAUSE_LIMITS);
         assignId(pause, 1L);
         LocalDate thirdDay = start.plusDays(2);
 
@@ -130,7 +130,7 @@ class MembershipPauseExtensionTest {
         // given
         LocalDate start = LocalDate.of(2026, 9, 17);
         Membership membership = count(start, 10);
-        assignId(membership.pause(start, 7, start, PAUSE_LIMITS), 1L);
+        assignId(membership.pause(start, 7, start, false, PAUSE_LIMITS), 1L);
         LocalDate releaseDay = start.plusDays(2);
 
         // when
@@ -154,8 +154,8 @@ class MembershipPauseExtensionTest {
         LocalDate today = LocalDate.of(2026, 9, 17);
         Membership membership = period(today, 3);
         LocalDate originalEnd = membership.getEndDate();
-        assignId(membership.pause(today, 3, today, PAUSE_LIMITS), 1L);
-        assignId(membership.pause(today.plusDays(10), 4, today, PAUSE_LIMITS), 2L);
+        assignId(membership.pause(today, 3, today, false, PAUSE_LIMITS), 1L);
+        assignId(membership.pause(today.plusDays(10), 4, today, false, PAUSE_LIMITS), 2L);
 
         // when
         MembershipPause released = membership.releasePause(2L, today.plusDays(1));
@@ -173,7 +173,7 @@ class MembershipPauseExtensionTest {
         LocalDate today = LocalDate.of(2026, 9, 17);
         Membership membership = period(today, 3);
         LocalDate originalEnd = membership.getEndDate();
-        assignId(membership.pause(today.plusDays(5), 4, today, PAUSE_LIMITS), 1L);
+        assignId(membership.pause(today.plusDays(5), 4, today, false, PAUSE_LIMITS), 1L);
 
         // when
         MembershipPause released = membership.releasePause(1L, today);
@@ -191,18 +191,18 @@ class MembershipPauseExtensionTest {
         // given — 3개월권(상한 21일), 3일씩 3건
         LocalDate today = LocalDate.of(2026, 9, 17);
         Membership membership = period(today, 3);
-        assignId(membership.pause(today.plusDays(1), 3, today, PAUSE_LIMITS), 1L);
-        assignId(membership.pause(today.plusDays(5), 3, today, PAUSE_LIMITS), 2L);
-        assignId(membership.pause(today.plusDays(9), 3, today, PAUSE_LIMITS), 3L);
+        assignId(membership.pause(today.plusDays(1), 3, today, false, PAUSE_LIMITS), 1L);
+        assignId(membership.pause(today.plusDays(5), 3, today, false, PAUSE_LIMITS), 2L);
+        assignId(membership.pause(today.plusDays(9), 3, today, false, PAUSE_LIMITS), 3L);
         membership.releasePause(2L, today);
 
         // when
-        MembershipPause fourth = membership.pause(today.plusDays(13), 3, today, PAUSE_LIMITS);
+        MembershipPause fourth = membership.pause(today.plusDays(13), 3, today, false, PAUSE_LIMITS);
 
         // then
         assertThat(fourth.getStartDate()).isEqualTo(today.plusDays(13));
         assertThat(membership.getPauses()).hasSize(4);
-        assertThatThrownBy(() -> membership.pause(today.plusDays(17), 3, today, PAUSE_LIMITS))
+        assertThatThrownBy(() -> membership.pause(today.plusDays(17), 3, today, false, PAUSE_LIMITS))
                 .isInstanceOf(MembershipException.class)
                 .extracting("errorCode")
                 .isEqualTo(ErrorCode.PAUSE_COUNT_LIMIT_EXCEEDED);

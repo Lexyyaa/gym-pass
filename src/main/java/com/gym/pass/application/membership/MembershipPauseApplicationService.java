@@ -7,12 +7,14 @@ import java.time.Clock;
 import java.time.LocalDate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * 정지 등록 · 조기 해제 (API-4 · API-5).
  * 회원 id 조회는 락 트랜잭션 밖에서 하고, 락 → 검사 → 변경은 1트랜잭션이다 (D-26 · 03 §7).
  * 회원 id 조회를 같은 트랜잭션에 두면 스냅샷이 member 락보다 먼저 잡히므로 TransactionTemplate으로 경계를 나눈다.
+ * 바깥 트랜잭션에 합류하면 그 스냅샷을 이어 쓰게 되므로 전파는 REQUIRES_NEW다.
  */
 @Service
 public class MembershipPauseApplicationService {
@@ -31,6 +33,7 @@ public class MembershipPauseApplicationService {
         this.membershipProperties = membershipProperties;
         this.clock = clock;
         this.transactionTemplate = new TransactionTemplate(transactionManager);
+        this.transactionTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     }
 
     /** 정지 등록 (FR-4.1 ~ FR-4.3). 상한은 설정값이다 (D-2). */

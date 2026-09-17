@@ -162,18 +162,31 @@ public class Membership extends BaseTimeEntity {
     /**
      * 정지 등록 (FR-4.1 ~ FR-4.3 · D-2 · D-8 · D-19 · D-28). 등록한 정지를 돌려준다.
      * 예정 일수만큼 종료일을 즉시 늘리고 PAUSED 이력을 남긴다. 시작일이 오늘이면 PAUSED로 전이한다 (03 §4).
-     * 상한은 설정값이다. 검사 순서: 입력 → 소급 → 정지 가능 상태 → 횟수 → 누적 일수 → 겹침 → 날짜 범위.
+     * 상한은 설정값이다.
+     * 검사 순서: 입력 → 소급 → 시작일 상한 → 정지 가능 상태 → 당일 출입 → 횟수 → 누적 일수 → 겹침 → 연장 후 날짜 범위.
+     * 날짜 계산(plusDays)은 시작일 상한 검사 뒤에만 한다. 범위 밖 입력이 DateTimeException으로 새지 않게 한다.
+     * enteredToday는 이 회원권의 오늘(KST) 출입 기록 존재 여부(차감 무관)이며, 락을 잡은 뒤에 조회한 값이어야 한다 (D-30).
      */
     public MembershipPause pause(
-            LocalDate pauseStartDate, Integer days, LocalDate today, MembershipPauseLimits limits) {
+            LocalDate pauseStartDate,
+            Integer days,
+            LocalDate today,
+            boolean enteredToday,
+            MembershipPauseLimits limits) {
         if (pauseStartDate == null || days == null || days < 1) {
             throw new MembershipException(ErrorCode.MEMBERSHIP_INVALID_INPUT, "정지 시작일과 1일 이상의 정지 일수는 필수입니다.");
         }
         if (pauseStartDate.isBefore(today)) {
             throw new MembershipException(ErrorCode.PAUSE_START_DATE_PAST);
         }
+        if (pauseStartDate.isAfter(MAX_DATE)) {
+            throw new MembershipException(ErrorCode.MEMBERSHIP_INVALID_INPUT, "정지 시작일은 " + MAX_DATE + " 이전이어야 합니다.");
+        }
         if (!isPausableOn(today)) {
             throw new MembershipException(ErrorCode.MEMBERSHIP_NOT_PAUSABLE);
+        }
+        if (enteredToday && pauseStartDate.isEqual(today)) {
+            throw new MembershipException(ErrorCode.PAUSE_START_DATE_USED);
         }
         long pauseCount =
                 pauses.stream().filter(MembershipPause::countsTowardLimit).count();
@@ -208,13 +221,14 @@ public class Membership extends BaseTimeEntity {
      * 정지 조기 해제 (FR-4.2 · D-8 · C-24 · C-25). 해제한 정지를 돌려준다.
      * 해제 당일까지 정지로 치고, 미사용 일수만큼 종료일을 되돌린 뒤 RESUMED 이력을 남긴다.
      * PAUSED 상태는 해제 대상을 뺀 다른 정지가 오늘을 포함하지 않으면 ACTIVE로 바꾼다 (03 §4).
+     * 회원권이 EXPIRED · CANCELED(종결 상태)면 PAUSE_NOT_RELEASABLE이다 (03 §4 · API-5).
      */
     public MembershipPause releasePause(Long pauseId, LocalDate today) {
         MembershipPause target = pauses.stream()
                 .filter(pause -> pause.getId().equals(pauseId))
                 .findFirst()
                 .orElseThrow(() -> new MembershipException(ErrorCode.PAUSE_NOT_FOUND));
-        if (!target.isReleasableOn(today)) {
+        if (!status.isUsable() || !target.isReleasableOn(today)) {
             throw new MembershipException(ErrorCode.PAUSE_NOT_RELEASABLE);
         }
 

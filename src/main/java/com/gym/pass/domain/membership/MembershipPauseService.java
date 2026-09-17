@@ -1,5 +1,6 @@
 package com.gym.pass.domain.membership;
 
+import com.gym.pass.domain.attendance.AttendanceRecordRepository;
 import com.gym.pass.domain.member.MemberRepository;
 import java.time.LocalDate;
 import lombok.RequiredArgsConstructor;
@@ -7,7 +8,7 @@ import org.springframework.stereotype.Component;
 
 /**
  * 정지 등록 · 조기 해제 도메인 서비스 (FR-4.1 ~ FR-4.3 · 03 §7 · D-26).
- * member 행 락 → membership 행 락 → 지점 검사 → 회원권 행위 순서로 실행한다.
+ * member 행 락 → membership 행 락 → 지점 검사 → (정지 등록만) 오늘 출입 조회 → 회원권 행위 순서로 실행한다.
  * lock 메서드는 호출 측 트랜잭션 안에서 실행돼야 하고, 그 트랜잭션의 첫 쿼리여야 한다.
  */
 @Component
@@ -16,6 +17,7 @@ public class MembershipPauseService {
 
     private final MemberRepository memberRepository;
     private final MembershipRepository membershipRepository;
+    private final AttendanceRecordRepository attendanceRecordRepository;
 
     /**
      * 회원권의 회원 id. 없으면 MEMBERSHIP_NOT_FOUND.
@@ -35,7 +37,9 @@ public class MembershipPauseService {
             LocalDate today,
             MembershipPauseLimits limits) {
         Membership membership = lock(memberId, membershipId, branchId);
-        MembershipPause pause = membership.pause(startDate, days, today, limits);
+        // D-30: 출입 기록 조회는 락 뒤에 한다. 출입은 membership 행 락을 거치므로 락 이후 스냅샷이 먼저 커밋된 출입을 본다
+        boolean enteredToday = attendanceRecordRepository.existsOn(membershipId, today);
+        MembershipPause pause = membership.pause(startDate, days, today, enteredToday, limits);
         membershipRepository.flush();
         return new MembershipPauseResult(membership, pause);
     }

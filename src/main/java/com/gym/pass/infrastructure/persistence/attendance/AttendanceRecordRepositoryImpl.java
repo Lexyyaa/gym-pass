@@ -21,4 +21,9 @@ public class AttendanceRecordRepositoryImpl implements AttendanceRecordRepositor
     public boolean existsDeductedOn(Long membershipId, LocalDate entryDate) {
         return attendanceRecordJpaRepository.existsByMembershipIdAndEntryDateAndDeductedTrue(membershipId, entryDate);
     }
+
+    @Override
+    public boolean existsOn(Long membershipId, LocalDate entryDate) {
+        return attendanceRecordJpaRepository.existsByMembershipIdAndEntryDate(membershipId, entryDate);
+    }
 }

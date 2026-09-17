@@ -10,6 +10,9 @@ import java.time.LocalDate;
 import org.assertj.core.api.ThrowableAssert.ThrowingCallable;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.test.util.ReflectionTestUtils;
 
 /** Membership의 정지 등록 · 해제 규칙과 정지 중 출입 판정 (FR-4.1 ~ FR-4.4 · 03 §3.3 · §4). */
@@ -27,7 +30,7 @@ class MembershipPauseTest {
         LocalDate endDate = membership.getEndDate();
 
         // when
-        MembershipPause pause = membership.pause(TODAY.plusDays(3), 7, TODAY, PAUSE_LIMITS);
+        MembershipPause pause = membership.pause(TODAY.plusDays(3), 7, TODAY, false, PAUSE_LIMITS);
 
         // then
         assertThat(pause.getStartDate()).isEqualTo(TODAY.plusDays(3));
@@ -53,7 +56,7 @@ class MembershipPauseTest {
         Membership membership = period(3);
 
         // when
-        membership.pause(TODAY, 1, TODAY, PAUSE_LIMITS);
+        membership.pause(TODAY, 1, TODAY, false, PAUSE_LIMITS);
 
         // then
         assertThat(membership.getStatus()).isEqualTo(MembershipStatus.PAUSED);
@@ -64,11 +67,11 @@ class MembershipPauseTest {
     void pauseWhilePaused() {
         // given
         Membership membership = period(3);
-        membership.pause(TODAY, 3, TODAY, PAUSE_LIMITS);
+        membership.pause(TODAY, 3, TODAY, false, PAUSE_LIMITS);
         LocalDate endDate = membership.getEndDate();
 
         // when
-        membership.pause(TODAY.plusDays(10), 2, TODAY, PAUSE_LIMITS);
+        membership.pause(TODAY.plusDays(10), 2, TODAY, false, PAUSE_LIMITS);
 
         // then
         assertThat(membership.getStatus()).isEqualTo(MembershipStatus.PAUSED);
@@ -85,7 +88,8 @@ class MembershipPauseTest {
 
         // when / then
         assertMembershipError(
-                () -> membership.pause(TODAY.minusDays(1), 3, TODAY, PAUSE_LIMITS), ErrorCode.PAUSE_START_DATE_PAST);
+                () -> membership.pause(TODAY.minusDays(1), 3, TODAY, false, PAUSE_LIMITS),
+                ErrorCode.PAUSE_START_DATE_PAST);
         assertUnchanged(membership, endDate);
     }
 
@@ -100,9 +104,11 @@ class MembershipPauseTest {
 
         // when / then
         assertMembershipError(
-                () -> expired.pause(TODAY.plusDays(1), 3, TODAY, PAUSE_LIMITS), ErrorCode.MEMBERSHIP_NOT_PAUSABLE);
+                () -> expired.pause(TODAY.plusDays(1), 3, TODAY, false, PAUSE_LIMITS),
+                ErrorCode.MEMBERSHIP_NOT_PAUSABLE);
         assertMembershipError(
-                () -> canceled.pause(TODAY.plusDays(1), 3, TODAY, PAUSE_LIMITS), ErrorCode.MEMBERSHIP_NOT_PAUSABLE);
+                () -> canceled.pause(TODAY.plusDays(1), 3, TODAY, false, PAUSE_LIMITS),
+                ErrorCode.MEMBERSHIP_NOT_PAUSABLE);
         assertUnchanged(expired, expired.getEndDate());
         assertUnchanged(canceled, canceled.getEndDate());
     }
@@ -116,11 +122,11 @@ class MembershipPauseTest {
         Membership onEnd = period(1);
 
         // when
-        onEnd.pause(endDate, 1, endDate, PAUSE_LIMITS);
+        onEnd.pause(endDate, 1, endDate, false, PAUSE_LIMITS);
 
         // then
         assertMembershipError(
-                () -> afterEnd.pause(endDate.plusDays(1), 1, endDate.plusDays(1), PAUSE_LIMITS),
+                () -> afterEnd.pause(endDate.plusDays(1), 1, endDate.plusDays(1), false, PAUSE_LIMITS),
                 ErrorCode.MEMBERSHIP_NOT_PAUSABLE);
         assertUnchanged(afterEnd, endDate);
         assertThat(onEnd.getEndDate()).isEqualTo(endDate.plusDays(1));
@@ -136,7 +142,8 @@ class MembershipPauseTest {
 
         // when / then
         assertMembershipError(
-                () -> membership.pause(TODAY.plusDays(1), 3, TODAY, PAUSE_LIMITS), ErrorCode.MEMBERSHIP_NOT_PAUSABLE);
+                () -> membership.pause(TODAY.plusDays(1), 3, TODAY, false, PAUSE_LIMITS),
+                ErrorCode.MEMBERSHIP_NOT_PAUSABLE);
         assertThat(membership.getPauses()).isEmpty();
         assertThat(membership.getEndDate()).isEqualTo(endDate);
         assertThat(membership.getStatus()).isEqualTo(MembershipStatus.ACTIVE);
@@ -150,12 +157,12 @@ class MembershipPauseTest {
         LocalDate endDate = membership.getEndDate();
 
         // when
-        membership.pause(TODAY.plusDays(1), 42, TODAY, PAUSE_LIMITS);
+        membership.pause(TODAY.plusDays(1), 42, TODAY, false, PAUSE_LIMITS);
 
         // then
         assertThat(membership.getEndDate()).isEqualTo(endDate.plusDays(42));
         assertMembershipError(
-                () -> membership.pause(TODAY.plusDays(100), 1, TODAY, PAUSE_LIMITS),
+                () -> membership.pause(TODAY.plusDays(100), 1, TODAY, false, PAUSE_LIMITS),
                 ErrorCode.PAUSE_DAYS_LIMIT_EXCEEDED);
     }
 
@@ -164,14 +171,14 @@ class MembershipPauseTest {
     void countLimit() {
         // given
         Membership membership = period(3);
-        membership.pause(TODAY.plusDays(1), 1, TODAY, PAUSE_LIMITS);
-        membership.pause(TODAY.plusDays(3), 1, TODAY, PAUSE_LIMITS);
-        membership.pause(TODAY.plusDays(5), 1, TODAY, PAUSE_LIMITS);
+        membership.pause(TODAY.plusDays(1), 1, TODAY, false, PAUSE_LIMITS);
+        membership.pause(TODAY.plusDays(3), 1, TODAY, false, PAUSE_LIMITS);
+        membership.pause(TODAY.plusDays(5), 1, TODAY, false, PAUSE_LIMITS);
         LocalDate endDate = membership.getEndDate();
 
         // when / then
         assertMembershipError(
-                () -> membership.pause(TODAY.plusDays(7), 1, TODAY, PAUSE_LIMITS),
+                () -> membership.pause(TODAY.plusDays(7), 1, TODAY, false, PAUSE_LIMITS),
                 ErrorCode.PAUSE_COUNT_LIMIT_EXCEEDED);
         assertThat(membership.getPauses()).hasSize(3);
         assertThat(membership.getEndDate()).isEqualTo(endDate);
@@ -183,15 +190,15 @@ class MembershipPauseTest {
     void releasedAfterStartStillCounts() {
         // given
         Membership membership = period(3);
-        MembershipPause first = membership.pause(TODAY, 3, TODAY, PAUSE_LIMITS);
+        MembershipPause first = membership.pause(TODAY, 3, TODAY, false, PAUSE_LIMITS);
         assignId(first, 1L);
         membership.releasePause(1L, TODAY);
-        membership.pause(TODAY.plusDays(5), 1, TODAY, PAUSE_LIMITS);
-        membership.pause(TODAY.plusDays(7), 1, TODAY, PAUSE_LIMITS);
+        membership.pause(TODAY.plusDays(5), 1, TODAY, false, PAUSE_LIMITS);
+        membership.pause(TODAY.plusDays(7), 1, TODAY, false, PAUSE_LIMITS);
 
         // when / then
         assertMembershipError(
-                () -> membership.pause(TODAY.plusDays(9), 1, TODAY, PAUSE_LIMITS),
+                () -> membership.pause(TODAY.plusDays(9), 1, TODAY, false, PAUSE_LIMITS),
                 ErrorCode.PAUSE_COUNT_LIMIT_EXCEEDED);
     }
 
@@ -200,17 +207,18 @@ class MembershipPauseTest {
     void daysLimit() {
         // given — 1개월권 상한 7일
         Membership exceeded = period(1);
-        exceeded.pause(TODAY.plusDays(1), 5, TODAY, PAUSE_LIMITS);
+        exceeded.pause(TODAY.plusDays(1), 5, TODAY, false, PAUSE_LIMITS);
         LocalDate endDate = exceeded.getEndDate();
         Membership boundary = period(1);
-        boundary.pause(TODAY.plusDays(1), 5, TODAY, PAUSE_LIMITS);
+        boundary.pause(TODAY.plusDays(1), 5, TODAY, false, PAUSE_LIMITS);
 
         // when
-        boundary.pause(TODAY.plusDays(10), 2, TODAY, PAUSE_LIMITS);
+        boundary.pause(TODAY.plusDays(10), 2, TODAY, false, PAUSE_LIMITS);
 
         // then
         assertMembershipError(
-                () -> exceeded.pause(TODAY.plusDays(10), 3, TODAY, PAUSE_LIMITS), ErrorCode.PAUSE_DAYS_LIMIT_EXCEEDED);
+                () -> exceeded.pause(TODAY.plusDays(10), 3, TODAY, false, PAUSE_LIMITS),
+                ErrorCode.PAUSE_DAYS_LIMIT_EXCEEDED);
         assertThat(exceeded.getPauses()).hasSize(1);
         assertThat(exceeded.getEndDate()).isEqualTo(endDate);
         assertThat(boundary.getPauses()).hasSize(2);
@@ -224,9 +232,10 @@ class MembershipPauseTest {
 
         // when / then
         assertMembershipError(
-                () -> membership.pause(TODAY.plusDays(1), 8, TODAY, PAUSE_LIMITS), ErrorCode.PAUSE_DAYS_LIMIT_EXCEEDED);
+                () -> membership.pause(TODAY.plusDays(1), 8, TODAY, false, PAUSE_LIMITS),
+                ErrorCode.PAUSE_DAYS_LIMIT_EXCEEDED);
         assertMembershipError(
-                () -> membership.pause(TODAY.plusDays(1), Integer.MAX_VALUE, TODAY, PAUSE_LIMITS),
+                () -> membership.pause(TODAY.plusDays(1), Integer.MAX_VALUE, TODAY, false, PAUSE_LIMITS),
                 ErrorCode.PAUSE_DAYS_LIMIT_EXCEEDED);
         assertThat(membership.getPauses()).isEmpty();
     }
@@ -236,17 +245,17 @@ class MembershipPauseTest {
     void releasedPauseCountsUsedDays() {
         // given — 1개월권 상한 7일, 7일 정지를 2일차에 해제 → 사용 2일
         Membership membership = period(1);
-        MembershipPause first = membership.pause(TODAY, 7, TODAY, PAUSE_LIMITS);
+        MembershipPause first = membership.pause(TODAY, 7, TODAY, false, PAUSE_LIMITS);
         assignId(first, 1L);
         membership.releasePause(1L, TODAY.plusDays(1));
 
         // when
-        membership.pause(TODAY.plusDays(10), 5, TODAY.plusDays(2), PAUSE_LIMITS);
+        membership.pause(TODAY.plusDays(10), 5, TODAY.plusDays(2), false, PAUSE_LIMITS);
 
         // then
         assertThat(membership.getPauses()).hasSize(2);
         assertMembershipError(
-                () -> membership.pause(TODAY.plusDays(20), 1, TODAY.plusDays(2), PAUSE_LIMITS),
+                () -> membership.pause(TODAY.plusDays(20), 1, TODAY.plusDays(2), false, PAUSE_LIMITS),
                 ErrorCode.PAUSE_DAYS_LIMIT_EXCEEDED);
     }
 
@@ -255,21 +264,21 @@ class MembershipPauseTest {
     void overlap() {
         // given — 기존 정지: TODAY+5 ~ TODAY+9
         Membership membership = period(3);
-        membership.pause(TODAY.plusDays(5), 5, TODAY, PAUSE_LIMITS);
+        membership.pause(TODAY.plusDays(5), 5, TODAY, false, PAUSE_LIMITS);
         LocalDate endDate = membership.getEndDate();
 
         // when / then
         assertMembershipError(
-                () -> membership.pause(TODAY.plusDays(9), 2, TODAY, PAUSE_LIMITS), ErrorCode.PAUSE_OVERLAPPED);
+                () -> membership.pause(TODAY.plusDays(9), 2, TODAY, false, PAUSE_LIMITS), ErrorCode.PAUSE_OVERLAPPED);
         assertMembershipError(
-                () -> membership.pause(TODAY.plusDays(4), 2, TODAY, PAUSE_LIMITS), ErrorCode.PAUSE_OVERLAPPED);
+                () -> membership.pause(TODAY.plusDays(4), 2, TODAY, false, PAUSE_LIMITS), ErrorCode.PAUSE_OVERLAPPED);
         assertMembershipError(
-                () -> membership.pause(TODAY.plusDays(6), 1, TODAY, PAUSE_LIMITS), ErrorCode.PAUSE_OVERLAPPED);
+                () -> membership.pause(TODAY.plusDays(6), 1, TODAY, false, PAUSE_LIMITS), ErrorCode.PAUSE_OVERLAPPED);
         assertThat(membership.getPauses()).hasSize(1);
         assertThat(membership.getEndDate()).isEqualTo(endDate);
 
-        membership.pause(TODAY.plusDays(3), 2, TODAY, PAUSE_LIMITS);
-        membership.pause(TODAY.plusDays(10), 1, TODAY, PAUSE_LIMITS);
+        membership.pause(TODAY.plusDays(3), 2, TODAY, false, PAUSE_LIMITS);
+        membership.pause(TODAY.plusDays(10), 1, TODAY, false, PAUSE_LIMITS);
         assertThat(membership.getPauses()).hasSize(3);
     }
 
@@ -278,9 +287,9 @@ class MembershipPauseTest {
     void overlapUsesEffectiveInterval() {
         // given — 진행 중 정지(TODAY ~ TODAY+6)를 TODAY+1에 해제, 예약 정지(TODAY+10 ~ TODAY+12)를 시작 전에 해제
         Membership membership = period(3);
-        MembershipPause ongoing = membership.pause(TODAY, 7, TODAY, PAUSE_LIMITS);
+        MembershipPause ongoing = membership.pause(TODAY, 7, TODAY, false, PAUSE_LIMITS);
         assignId(ongoing, 1L);
-        MembershipPause reserved = membership.pause(TODAY.plusDays(10), 3, TODAY, PAUSE_LIMITS);
+        MembershipPause reserved = membership.pause(TODAY.plusDays(10), 3, TODAY, false, PAUSE_LIMITS);
         assignId(reserved, 2L);
         LocalDate releaseDay = TODAY.plusDays(1);
         membership.releasePause(1L, releaseDay);
@@ -288,9 +297,9 @@ class MembershipPauseTest {
 
         // when / then — 해제 당일은 여전히 정지 구간이라 겹친다
         assertMembershipError(
-                () -> membership.pause(releaseDay, 1, releaseDay, PAUSE_LIMITS), ErrorCode.PAUSE_OVERLAPPED);
-        membership.pause(releaseDay.plusDays(1), 2, releaseDay, PAUSE_LIMITS);
-        membership.pause(TODAY.plusDays(10), 3, releaseDay, PAUSE_LIMITS);
+                () -> membership.pause(releaseDay, 1, releaseDay, false, PAUSE_LIMITS), ErrorCode.PAUSE_OVERLAPPED);
+        membership.pause(releaseDay.plusDays(1), 2, releaseDay, false, PAUSE_LIMITS);
+        membership.pause(TODAY.plusDays(10), 3, releaseDay, false, PAUSE_LIMITS);
         assertThat(membership.getPauses()).hasSize(4);
     }
 
@@ -303,10 +312,11 @@ class MembershipPauseTest {
 
         // when / then
         assertMembershipError(
-                () -> membership.pause(TODAY, null, TODAY, PAUSE_LIMITS), ErrorCode.MEMBERSHIP_INVALID_INPUT);
+                () -> membership.pause(TODAY, null, TODAY, false, PAUSE_LIMITS), ErrorCode.MEMBERSHIP_INVALID_INPUT);
         assertMembershipError(
-                () -> membership.pause(TODAY, 0, TODAY, PAUSE_LIMITS), ErrorCode.MEMBERSHIP_INVALID_INPUT);
-        assertMembershipError(() -> membership.pause(null, 3, TODAY, PAUSE_LIMITS), ErrorCode.MEMBERSHIP_INVALID_INPUT);
+                () -> membership.pause(TODAY, 0, TODAY, false, PAUSE_LIMITS), ErrorCode.MEMBERSHIP_INVALID_INPUT);
+        assertMembershipError(
+                () -> membership.pause(null, 3, TODAY, false, PAUSE_LIMITS), ErrorCode.MEMBERSHIP_INVALID_INPUT);
         assertUnchanged(membership, endDate);
     }
 
@@ -322,11 +332,12 @@ class MembershipPauseTest {
         LocalDate start = max.minusDays(10);
 
         // when
-        fits.pause(start, 1, start, PAUSE_LIMITS);
+        fits.pause(start, 1, start, false, PAUSE_LIMITS);
 
         // then
         assertThat(fits.getEndDate()).isEqualTo(max);
-        assertMembershipError(() -> overflow.pause(start, 2, start, PAUSE_LIMITS), ErrorCode.MEMBERSHIP_INVALID_INPUT);
+        assertMembershipError(
+                () -> overflow.pause(start, 2, start, false, PAUSE_LIMITS), ErrorCode.MEMBERSHIP_INVALID_INPUT);
         assertUnchanged(overflow, max.minusDays(1));
     }
 
@@ -335,7 +346,7 @@ class MembershipPauseTest {
     void entryDuringPause() {
         // given — 정지: TODAY+2 ~ TODAY+4
         Membership membership = count(10);
-        membership.pause(TODAY.plusDays(2), 3, TODAY, PAUSE_LIMITS);
+        membership.pause(TODAY.plusDays(2), 3, TODAY, false, PAUSE_LIMITS);
 
         // when / then
         membership.validateEntry(TODAY.plusDays(1), false);
@@ -349,7 +360,7 @@ class MembershipPauseTest {
     void deductDuringPause() {
         // given
         Membership membership = count(10);
-        membership.pause(TODAY, 3, TODAY, PAUSE_LIMITS);
+        membership.pause(TODAY, 3, TODAY, false, PAUSE_LIMITS);
         int histories = membership.getHistories().size();
 
         // when / then
@@ -363,9 +374,9 @@ class MembershipPauseTest {
     void entryJudgedByIntervalNotStatus() {
         // given
         Membership reserved = period(3);
-        reserved.pause(TODAY.plusDays(1), 3, TODAY, PAUSE_LIMITS);
+        reserved.pause(TODAY.plusDays(1), 3, TODAY, false, PAUSE_LIMITS);
         Membership stalePaused = period(3);
-        stalePaused.pause(TODAY, 1, TODAY, PAUSE_LIMITS);
+        stalePaused.pause(TODAY, 1, TODAY, false, PAUSE_LIMITS);
 
         // when / then
         assertThat(reserved.getStatus()).isEqualTo(MembershipStatus.ACTIVE);
@@ -379,7 +390,7 @@ class MembershipPauseTest {
     void releaseNotFound() {
         // given
         Membership membership = period(3);
-        MembershipPause pause = membership.pause(TODAY, 3, TODAY, PAUSE_LIMITS);
+        MembershipPause pause = membership.pause(TODAY, 3, TODAY, false, PAUSE_LIMITS);
         assignId(pause, 1L);
         LocalDate endDate = membership.getEndDate();
 
@@ -395,14 +406,14 @@ class MembershipPauseTest {
     void releaseNotReleasable() {
         // given — 정지: TODAY ~ TODAY+2
         Membership released = period(3);
-        assignId(released.pause(TODAY, 3, TODAY, PAUSE_LIMITS), 1L);
+        assignId(released.pause(TODAY, 3, TODAY, false, PAUSE_LIMITS), 1L);
         released.releasePause(1L, TODAY);
         LocalDate releasedEndDate = released.getEndDate();
         Membership ended = period(3);
-        assignId(ended.pause(TODAY, 3, TODAY, PAUSE_LIMITS), 1L);
+        assignId(ended.pause(TODAY, 3, TODAY, false, PAUSE_LIMITS), 1L);
         LocalDate endedEndDate = ended.getEndDate();
         Membership lastDay = period(3);
-        assignId(lastDay.pause(TODAY, 3, TODAY, PAUSE_LIMITS), 1L);
+        assignId(lastDay.pause(TODAY, 3, TODAY, false, PAUSE_LIMITS), 1L);
         LocalDate lastDayEndDate = lastDay.getEndDate();
 
         // when
@@ -416,6 +427,88 @@ class MembershipPauseTest {
         assertThat(ended.getEndDate()).isEqualTo(endedEndDate);
         assertThat(lastDayPause.usedDays()).isEqualTo(3);
         assertThat(lastDay.getEndDate()).isEqualTo(lastDayEndDate);
+    }
+
+    @Test
+    @DisplayName("[TC-4-19] 오늘 출입 기록이 있으면 오늘 시작 정지는 PAUSE_START_DATE_USED이고 아무것도 바뀌지 않는다")
+    void pauseTodayAfterEntry() {
+        // given
+        Membership membership = period(3);
+        LocalDate endDate = membership.getEndDate();
+
+        // when / then
+        assertMembershipError(
+                () -> membership.pause(TODAY, 3, TODAY, true, PAUSE_LIMITS), ErrorCode.PAUSE_START_DATE_USED);
+        assertUnchanged(membership, endDate);
+        assertThat(membership.getStatus()).isEqualTo(MembershipStatus.ACTIVE);
+    }
+
+    @Test
+    @DisplayName("[TC-4-19] 오늘 출입 기록이 있어도 내일 시작 정지는 등록된다 (경계)")
+    void pauseTomorrowAfterEntry() {
+        // given
+        Membership membership = period(3);
+        LocalDate endDate = membership.getEndDate();
+
+        // when
+        membership.pause(TODAY.plusDays(1), 3, TODAY, true, PAUSE_LIMITS);
+
+        // then
+        assertThat(membership.getPauses()).hasSize(1);
+        assertThat(membership.getEndDate()).isEqualTo(endDate.plusDays(3));
+        assertThat(membership.getStatus()).isEqualTo(MembershipStatus.ACTIVE);
+    }
+
+    @Test
+    @DisplayName("[TC-4-19] 정지할 수 없는 회원권이면 오늘 출입이 있어도 MEMBERSHIP_NOT_PAUSABLE이 먼저다 (판정 순서)")
+    void notPausableBeforeStartDateUsed() {
+        // given
+        Membership membership = count(1);
+        membership.deduct(TODAY);
+
+        // when / then
+        assertMembershipError(
+                () -> membership.pause(TODAY, 3, TODAY, true, PAUSE_LIMITS), ErrorCode.MEMBERSHIP_NOT_PAUSABLE);
+        assertThat(membership.getPauses()).isEmpty();
+    }
+
+    @ParameterizedTest(name = "시작일 {0}")
+    @ValueSource(strings = {"+10000-01-01", "+999999999-12-31"})
+    @DisplayName("정지 시작일이 9999-12-31을 넘으면 날짜 계산 전에 MEMBERSHIP_INVALID_INPUT이고 아무것도 바뀌지 않는다")
+    void startDateBeyondMax(String startDate) {
+        // given
+        Membership membership = period(3);
+        LocalDate endDate = membership.getEndDate();
+        LocalDate start = LocalDate.parse(startDate);
+
+        // when / then
+        assertMembershipError(
+                () -> membership.pause(start, 3, TODAY, false, PAUSE_LIMITS), ErrorCode.MEMBERSHIP_INVALID_INPUT);
+        assertMembershipError(
+                () -> membership.pause(start, Integer.MAX_VALUE, TODAY, false, PAUSE_LIMITS),
+                ErrorCode.MEMBERSHIP_INVALID_INPUT);
+        assertUnchanged(membership, endDate);
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @EnumSource(
+            value = MembershipStatus.class,
+            names = {"EXPIRED", "CANCELED"})
+    @DisplayName("[TC-4-10] 회원권이 EXPIRED · CANCELED면 미래 정지도 PAUSE_NOT_RELEASABLE이고 종료일 · 정지가 그대로다")
+    void releaseOnTerminalMembership(MembershipStatus terminal) {
+        // given
+        Membership membership = period(3);
+        MembershipPause pause = membership.pause(TODAY.plusDays(2), 3, TODAY, false, PAUSE_LIMITS);
+        assignId(pause, 1L);
+        ReflectionTestUtils.setField(membership, "status", terminal);
+        LocalDate endDate = membership.getEndDate();
+
+        // when / then
+        assertMembershipError(() -> membership.releasePause(1L, TODAY), ErrorCode.PAUSE_NOT_RELEASABLE);
+        assertThat(pause.getReleasedDate()).isNull();
+        assertThat(membership.getEndDate()).isEqualTo(endDate);
+        assertThat(membership.getStatus()).isEqualTo(terminal);
+        assertThat(membership.getHistories()).hasSize(2);
     }
 
     private static Membership period(int months) {
