@@ -47,18 +47,18 @@ class GlobalExceptionHandlerTest {
     void businessException() throws Exception {
         mockMvc.perform(get("/samples/business"))
                 .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.errorCode").value("RESOURCE_NOT_FOUND"))
+                .andExpect(jsonPath("$.errorCode").value("COMMON_RESOURCE_NOT_FOUND"))
                 .andExpect(jsonPath("$.message").value("샘플이 없습니다."));
     }
 
     @Test
-    @DisplayName("요청 본문 필드 검증에 실패하면 400 INVALID_INPUT과 필드명을 응답한다")
+    @DisplayName("요청 본문 필드 검증에 실패하면 400 COMMON_INVALID_INPUT과 필드명을 응답한다")
     void invalidField() throws Exception {
         mockMvc.perform(post("/samples").contentType(MediaType.APPLICATION_JSON).content("""
                                 {"name": " ", "items": [{"amount": 1}]}
                                 """))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.errorCode").value("INVALID_INPUT"))
+                .andExpect(jsonPath("$.errorCode").value("COMMON_INVALID_INPUT"))
                 .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.startsWith("name:")));
     }
 
@@ -69,64 +69,64 @@ class GlobalExceptionHandlerTest {
                                 {"name": "a", "items": [{"amount": -1}]}
                                 """))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.errorCode").value("INVALID_INPUT"))
+                .andExpect(jsonPath("$.errorCode").value("COMMON_INVALID_INPUT"))
                 .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.startsWith("items[0].amount:")));
     }
 
     @Test
-    @DisplayName("본문 JSON 형식이 깨지면 400 INVALID_INPUT으로 응답한다")
+    @DisplayName("본문 JSON 형식이 깨지면 400 COMMON_INVALID_INPUT으로 응답한다")
     void malformedJson() throws Exception {
         mockMvc.perform(post("/samples").contentType(MediaType.APPLICATION_JSON).content("{"))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.errorCode").value("INVALID_INPUT"));
+                .andExpect(jsonPath("$.errorCode").value("COMMON_INVALID_INPUT"));
     }
 
     @Test
-    @DisplayName("필수 헤더가 없으면 400 INVALID_INPUT으로 응답한다")
+    @DisplayName("필수 헤더가 없으면 400 COMMON_INVALID_INPUT으로 응답한다")
     void missingHeader() throws Exception {
         mockMvc.perform(get("/samples/header"))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.errorCode").value("INVALID_INPUT"));
+                .andExpect(jsonPath("$.errorCode").value("COMMON_INVALID_INPUT"));
     }
 
     @Test
-    @DisplayName("경로 변수 타입이 맞지 않으면 400 INVALID_INPUT으로 응답한다")
+    @DisplayName("경로 변수 타입이 맞지 않으면 400 COMMON_INVALID_INPUT으로 응답한다")
     void typeMismatch() throws Exception {
         mockMvc.perform(get("/samples/abc"))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.errorCode").value("INVALID_INPUT"));
+                .andExpect(jsonPath("$.errorCode").value("COMMON_INVALID_INPUT"));
     }
 
     @Test
-    @DisplayName("매핑되지 않은 경로는 404 RESOURCE_NOT_FOUND로 응답한다")
+    @DisplayName("매핑되지 않은 경로는 404 COMMON_RESOURCE_NOT_FOUND로 응답한다")
     void noHandler() throws Exception {
         mockMvc.perform(get("/nope"))
                 .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.errorCode").value("RESOURCE_NOT_FOUND"));
+                .andExpect(jsonPath("$.errorCode").value("COMMON_RESOURCE_NOT_FOUND"));
     }
 
     @Test
-    @DisplayName("@Validated 파라미터 제약 위반(ConstraintViolationException)도 400 INVALID_INPUT으로 응답한다")
+    @DisplayName("@Validated 파라미터 제약 위반(ConstraintViolationException)도 400 COMMON_INVALID_INPUT으로 응답한다")
     void constraintViolation() throws Exception {
         mockMvc.perform(get("/samples/constraint"))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.errorCode").value("INVALID_INPUT"));
+                .andExpect(jsonPath("$.errorCode").value("COMMON_INVALID_INPUT"));
     }
 
     @Test
-    @DisplayName("지원하지 않는 메서드는 405 METHOD_NOT_ALLOWED로 응답한다")
+    @DisplayName("지원하지 않는 메서드는 405 COMMON_METHOD_NOT_ALLOWED로 응답한다")
     void methodNotAllowed() throws Exception {
         mockMvc.perform(post("/samples/business"))
                 .andExpect(status().isMethodNotAllowed())
-                .andExpect(jsonPath("$.errorCode").value("METHOD_NOT_ALLOWED"));
+                .andExpect(jsonPath("$.errorCode").value("COMMON_METHOD_NOT_ALLOWED"));
     }
 
     @Test
-    @DisplayName("예상하지 못한 예외는 500 INTERNAL_SERVER_ERROR로 응답하고 내부 메시지를 노출하지 않는다")
+    @DisplayName("예상하지 못한 예외는 500 COMMON_INTERNAL_SERVER_ERROR로 응답하고 내부 메시지를 노출하지 않는다")
     void unexpected() throws Exception {
         mockMvc.perform(get("/samples/unexpected"))
                 .andExpect(status().isInternalServerError())
-                .andExpect(jsonPath("$.errorCode").value("INTERNAL_SERVER_ERROR"))
+                .andExpect(jsonPath("$.errorCode").value("COMMON_INTERNAL_SERVER_ERROR"))
                 .andExpect(jsonPath("$.message").value("서버 오류가 발생했습니다."));
     }
 
@@ -135,7 +135,7 @@ class GlobalExceptionHandlerTest {
 
         @GetMapping("/samples/business")
         void business() {
-            throw new SampleException(ErrorCode.RESOURCE_NOT_FOUND, "샘플이 없습니다.");
+            throw new SampleException(ErrorCode.COMMON_RESOURCE_NOT_FOUND, "샘플이 없습니다.");
         }
 
         @PostMapping("/samples")

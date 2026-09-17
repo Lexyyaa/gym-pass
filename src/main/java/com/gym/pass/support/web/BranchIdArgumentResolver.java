@@ -31,7 +31,7 @@ public class BranchIdArgumentResolver implements HandlerMethodArgumentResolver {
 
     private static Long parse(String header) {
         if (header == null || !header.matches("\\d{1,18}")) {
-            throw new CommonException(ErrorCode.INVALID_INPUT, HEADER + ": 숫자 지점 ID가 필요합니다.");
+            throw new CommonException(ErrorCode.COMMON_INVALID_INPUT, HEADER + ": 숫자 지점 ID가 필요합니다.");
         }
         return Long.parseLong(header);
     }
