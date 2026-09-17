@@ -98,15 +98,15 @@ public class Membership extends BaseTimeEntity {
         this.price = registration.price();
     }
 
-    /** 종료일을 계산해 ACTIVE로 생성하고 REGISTERED 이력을 남긴다 (FR-2.2 · FR-2.4 · FR-5.5). */
-    public static Membership register(MembershipRegistration registration) {
-        validate(registration);
+    /** 종료일을 계산해 ACTIVE로 생성하고 REGISTERED 이력을 남긴다 (FR-2.2 · FR-2.4 · FR-5.5). 상한은 설정값이다 (C-34). */
+    public static Membership register(MembershipRegistration registration, MembershipLimits limits) {
+        validate(registration, limits);
         Membership membership = new Membership(registration);
         membership.histories.add(MembershipHistory.registered(membership));
         return membership;
     }
 
-    private static void validate(MembershipRegistration registration) {
+    private static void validate(MembershipRegistration registration, MembershipLimits limits) {
         if (registration.memberId() == null || registration.branchId() == null) {
             throw new MembershipException(ErrorCode.MEMBERSHIP_INVALID_INPUT, "회원과 지점은 필수입니다.");
         }
@@ -119,7 +119,7 @@ public class Membership extends BaseTimeEntity {
         if (registration.price() == null || registration.price() < 0) {
             throw new MembershipException(ErrorCode.MEMBERSHIP_INVALID_INPUT, "결제 금액은 0 이상이어야 합니다.");
         }
-        registration.type().validate(registration.months(), registration.count());
+        registration.type().validate(registration.months(), registration.count(), limits);
         if (registration.startDate().isBefore(MIN_DATE)) {
             throw new MembershipException(ErrorCode.MEMBERSHIP_INVALID_INPUT, "시작일은 " + MIN_DATE + " 이후여야 합니다.");
         }

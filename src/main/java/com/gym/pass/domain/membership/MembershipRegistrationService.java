@@ -18,8 +18,8 @@ public class MembershipRegistrationService {
     private final MemberRepository memberRepository;
     private final MembershipRepository membershipRepository;
 
-    public Membership register(MembershipRegistration registration, LocalDate today) {
-        Membership membership = Membership.register(registration);
+    public Membership register(MembershipRegistration registration, MembershipLimits limits, LocalDate today) {
+        Membership membership = Membership.register(registration, limits);
         memberRepository.getByIdForUpdate(registration.memberId());
         if (membershipRepository.existsValidByMemberId(registration.memberId(), today)) {
             throw new MembershipException(ErrorCode.MEMBERSHIP_ALREADY_ACTIVE);

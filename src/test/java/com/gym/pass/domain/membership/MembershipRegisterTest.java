@@ -13,6 +13,9 @@ import org.junit.jupiter.params.provider.CsvSource;
 
 class MembershipRegisterTest {
 
+    /** application.yml 기본값과 같은 상한 (C-34). 도메인 테스트는 값을 직접 넘긴다. */
+    private static final MembershipLimits LIMITS = new MembershipLimits(120, 1000);
+
     @ParameterizedTest(name = "{0} 시작 1개월 → {1}")
     @CsvSource({"2027-01-31, 2027-02-28", "2028-01-31, 2028-02-29"})
     @DisplayName("[TC-2-03] 1/31 시작 기간제 1개월의 종료일은 평년 2/28 · 윤년 2/29다")
@@ -21,7 +24,7 @@ class MembershipRegisterTest {
         MembershipRegistration registration = period(startDate, 1);
 
         // when
-        Membership membership = Membership.register(registration);
+        Membership membership = Membership.register(registration, LIMITS);
 
         // then
         assertThat(membership.getEndDate()).isEqualTo(expectedEndDate);
@@ -39,7 +42,7 @@ class MembershipRegisterTest {
                 new MembershipRegistration(1L, 1L, MembershipType.COUNT, startDate, null, 10, 200_000L);
 
         // when
-        Membership membership = Membership.register(registration);
+        Membership membership = Membership.register(registration, LIMITS);
 
         // then
         assertThat(membership.getEndDate()).isEqualTo(LocalDate.of(2027, 3, 17));
@@ -57,7 +60,7 @@ class MembershipRegisterTest {
                 new MembershipRegistration(1L, 1L, MembershipType.COUNT, LocalDate.of(2026, 8, 31), null, 5, 0L);
 
         // when
-        Membership membership = Membership.register(registration);
+        Membership membership = Membership.register(registration, LIMITS);
 
         // then
         assertThat(membership.getEndDate()).isEqualTo(LocalDate.of(2027, 2, 28));
@@ -71,7 +74,7 @@ class MembershipRegisterTest {
                 new MembershipRegistration(7L, 3L, MembershipType.COUNT, LocalDate.of(2026, 9, 17), null, 10, 200_000L);
 
         // when
-        Membership membership = Membership.register(registration);
+        Membership membership = Membership.register(registration, LIMITS);
 
         // then
         assertThat(membership.getHistories()).singleElement().satisfies(history -> {
@@ -93,7 +96,7 @@ class MembershipRegisterTest {
 
         // when
         // then
-        assertThatThrownBy(() -> Membership.register(registration))
+        assertThatThrownBy(() -> Membership.register(registration, LIMITS))
                 .isInstanceOf(MembershipException.class)
                 .extracting("errorCode")
                 .isEqualTo(ErrorCode.MEMBERSHIP_INVALID_INPUT);
@@ -108,7 +111,7 @@ class MembershipRegisterTest {
 
         // when
         // then
-        assertThatThrownBy(() -> Membership.register(registration))
+        assertThatThrownBy(() -> Membership.register(registration, LIMITS))
                 .isInstanceOf(MembershipException.class)
                 .extracting("errorCode")
                 .isEqualTo(ErrorCode.MEMBERSHIP_INVALID_INPUT);
@@ -124,11 +127,11 @@ class MembershipRegisterTest {
 
         // when
         // then
-        assertThatThrownBy(() -> Membership.register(zeroMonths))
+        assertThatThrownBy(() -> Membership.register(zeroMonths, LIMITS))
                 .isInstanceOf(MembershipException.class)
                 .extracting("errorCode")
                 .isEqualTo(ErrorCode.MEMBERSHIP_INVALID_INPUT);
-        assertThatThrownBy(() -> Membership.register(negativePrice))
+        assertThatThrownBy(() -> Membership.register(negativePrice, LIMITS))
                 .isInstanceOf(MembershipException.class)
                 .extracting("errorCode")
                 .isEqualTo(ErrorCode.MEMBERSHIP_INVALID_INPUT);
@@ -143,8 +146,8 @@ class MembershipRegisterTest {
         MembershipRegistration countType = count(startDate, 1000);
 
         // when
-        Membership periodMembership = Membership.register(period);
-        Membership countMembership = Membership.register(countType);
+        Membership periodMembership = Membership.register(period, LIMITS);
+        Membership countMembership = Membership.register(countType, LIMITS);
 
         // then
         assertThat(periodMembership.getEndDate()).isEqualTo(LocalDate.of(2036, 9, 17));
@@ -164,6 +167,30 @@ class MembershipRegisterTest {
         // then
         assertInvalidInput(tooManyMonths);
         assertInvalidInput(tooManyCount);
+    }
+
+    @Test
+    @DisplayName("[TC-2-14] 상한은 넘겨받은 설정값을 따른다 — 상한 12개월 · 10회면 13개월 · 11회는 거부되고 12개월 · 10회는 등록된다")
+    void upperBoundFollowsGivenLimits() {
+        // given
+        MembershipLimits limits = new MembershipLimits(12, 10);
+        LocalDate startDate = LocalDate.of(2026, 9, 17);
+
+        // when
+        Membership periodAtLimit = Membership.register(period(startDate, 12), limits);
+        Membership countAtLimit = Membership.register(count(startDate, 10), limits);
+
+        // then
+        assertThat(periodAtLimit.getMonths()).isEqualTo(12);
+        assertThat(countAtLimit.getRemainingCount()).isEqualTo(10);
+        assertThatThrownBy(() -> Membership.register(period(startDate, 13), limits))
+                .isInstanceOf(MembershipException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.MEMBERSHIP_INVALID_INPUT);
+        assertThatThrownBy(() -> Membership.register(count(startDate, 11), limits))
+                .isInstanceOf(MembershipException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.MEMBERSHIP_INVALID_INPUT);
     }
 
     @ParameterizedTest(name = "시작일 {0}")
@@ -188,7 +215,7 @@ class MembershipRegisterTest {
         MembershipRegistration registration = period(LocalDate.of(9999, 10, 31), 2);
 
         // when
-        Membership membership = Membership.register(registration);
+        Membership membership = Membership.register(registration, LIMITS);
 
         // then
         assertThat(membership.getEndDate()).isEqualTo(LocalDate.of(9999, 12, 31));
@@ -216,7 +243,7 @@ class MembershipRegisterTest {
         MembershipRegistration registration = period(LocalDate.of(1000, 1, 1), 1);
 
         // when
-        Membership membership = Membership.register(registration);
+        Membership membership = Membership.register(registration, LIMITS);
 
         // then
         assertThat(membership.getStartDate()).isEqualTo(LocalDate.of(1000, 1, 1));
@@ -254,7 +281,7 @@ class MembershipRegisterTest {
     }
 
     private static void assertInvalidInput(MembershipRegistration registration) {
-        assertThatThrownBy(() -> Membership.register(registration))
+        assertThatThrownBy(() -> Membership.register(registration, LIMITS))
                 .isInstanceOf(MembershipException.class)
                 .extracting("errorCode")
                 .isEqualTo(ErrorCode.MEMBERSHIP_INVALID_INPUT);

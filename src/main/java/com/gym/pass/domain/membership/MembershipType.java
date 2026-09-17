@@ -28,8 +28,8 @@ public enum MembershipType {
         }
 
         @Override
-        void validate(Integer months, Integer count) {
-            requireInRange(months, MAX_MONTHS, "기간제는 개월 수(months)가 1 이상 " + MAX_MONTHS + " 이하여야 합니다.");
+        void validate(Integer months, Integer count, MembershipLimits limits) {
+            requireInRange(months, limits.maxMonths(), "기간제는 개월 수(months)가 1 이상 " + limits.maxMonths() + " 이하여야 합니다.");
             requireAbsent(count, "기간제에는 이용 횟수(count)를 보낼 수 없습니다.");
         }
     },
@@ -52,20 +52,14 @@ public enum MembershipType {
         }
 
         @Override
-        void validate(Integer months, Integer count) {
-            requireInRange(count, MAX_COUNT, "횟수제는 이용 횟수(count)가 1 이상 " + MAX_COUNT + " 이하여야 합니다.");
+        void validate(Integer months, Integer count, MembershipLimits limits) {
+            requireInRange(count, limits.maxCount(), "횟수제는 이용 횟수(count)가 1 이상 " + limits.maxCount() + " 이하여야 합니다.");
             requireAbsent(months, "횟수제에는 개월 수(months)를 보낼 수 없습니다.");
         }
     };
 
     /** 횟수제 유효기간 (D-7 가정 · C-32 enum 상수 유지). */
     private static final int COUNT_VALIDITY_MONTHS = 6;
-
-    /** 기간제 개월 수 상한 (C-28). */
-    private static final int MAX_MONTHS = 120;
-
-    /** 횟수제 횟수 상한 (C-28). */
-    private static final int MAX_COUNT = 1000;
 
     /** 요청 문자열을 종류로 바꾼다. 모르는 값은 MEMBERSHIP_INVALID_INPUT. */
     public static MembershipType from(String value) {
@@ -91,8 +85,8 @@ public enum MembershipType {
     /** 출입 시 횟수 차감 대상인지. */
     public abstract boolean deductible();
 
-    /** 종류별 필수 값 · 상한 · 반대 종류 값 검증. 위반 시 MEMBERSHIP_INVALID_INPUT (D-22 · D-23). */
-    abstract void validate(Integer months, Integer count);
+    /** 종류별 필수 값 · 상한 · 반대 종류 값 검증. 상한은 설정값이다 (C-34). 위반 시 MEMBERSHIP_INVALID_INPUT (D-22 · D-23). */
+    abstract void validate(Integer months, Integer count, MembershipLimits limits);
 
     private static void requireInRange(Integer value, int max, String detail) {
         if (value == null || value < 1 || value > max) {
