@@ -96,8 +96,8 @@
 
 | 메서드 | 하는 일 | 실패 시 | 관련 FR |
 |---|---|---|---|
-| `create(name, phone)` | 이름 · 연락처 검증 후 생성 | `MEMBER_` 계열 400 | FR-2.1 |
-| `update(name, phone)` | 이름 · 연락처 수정 | `MEMBER_` 계열 400 | FR-7.1 |
+| `create(name, phone)` | 이름 · 연락처 검증 후 생성 | `MEMBER_INVALID_INPUT` 400 (D-22) | FR-2.1 |
+| `update(name, phone)` | 이름 · 연락처 수정 | `MEMBER_INVALID_INPUT` 400 (D-22) | FR-7.1 |
 
 **불변식** (서비스의 if문이 아니라 이 애그리거트가 스스로 지킨다)
 - 이름은 빈 값이 아니다
@@ -118,7 +118,7 @@
 
 | 메서드 | 하는 일 | 실패 시 | 관련 FR |
 |---|---|---|---|
-| `register(...)` | 종료일 계산(기간제 `plusMonths(개월)`, 횟수제 `plusMonths(6)`) 후 ACTIVE 생성 | `MEMBERSHIP_` 계열 400 | FR-2.2 · FR-2.4 |
+| `register(...)` | 종료일 계산(기간제 `plusMonths(개월)`, 횟수제 `plusMonths(6)`) 후 ACTIVE 생성 | `MEMBERSHIP_INVALID_INPUT` 400 (D-22) | FR-2.2 · FR-2.4 |
 | `validateEntry(today)` | 날짜 · 유효 정지 구간 · 잔여를 직접 검사해 출입 가능 판정 | `ATTENDANCE_` 계열 409 | FR-3.2 · FR-4.4 |
 | `deduct(today)` | 횟수제 잔여 1 차감 + `DEDUCTED` 이력, 잔여 0 도달 시 EXPIRED 전이 | `MEMBERSHIP_` 계열 4xx | FR-3.3 |
 | `pause(startDate, days, today)` | 상한 · 겹침 · 상태 검사 후 정지 등록, 종료일 += days, `PAUSED` 이력, 시작일 = 오늘이면 PAUSED 전이 | `PAUSE_` 계열 4xx | FR-4.1~4.3 |

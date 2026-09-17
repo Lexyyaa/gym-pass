@@ -120,6 +120,8 @@
 | TC-2-09 | 실패 | API | 정지 중(`PAUSED`) 회원권 보유 회원에 재등록 | 409, 저장 0건 | FR-2.3 |
 | TC-2-10 | 엣지 | API | 종료일 < 오늘인 stale `ACTIVE`만 보유한 회원에 등록 | 201, 새 회원권 저장 | FR-2.3 |
 | TC-2-11 | 실패 | API | 시작일이 미래인 `ACTIVE` 회원권 보유 회원에 등록 | 409 `MEMBERSHIP_ALREADY_ACTIVE`, 저장 0건 | FR-2.3 |
+| TC-2-12 | 실패 | Domain | 공백 이름 · 형식 오류 연락처로 `Member.create` | `MEMBER_INVALID_INPUT` (D-22) | FR-2.1 |
+| TC-2-13 | 실패 | API | 기간제인데 `months` 없음 · 횟수제인데 `count` 없음 | 400 `MEMBERSHIP_INVALID_INPUT`, 저장 0건 (D-22) | FR-2.2 |
 
 - TC-2-10의 stale `ACTIVE`는 과거 시작일로 등록해 만든다 (시작일 값 제한 없음, 배치 미실행)
 
@@ -666,6 +668,20 @@
   - 조회 보정은 종료일 기준만 다룬다 — 정지 시작 · 종료 전이는 배치가 실패하면 하루 어긋난다
   - 배치 조건은 "오늘 시작 · 어제 종료" 문구를 유지한다 (C-26) — 배치가 빠진 날의 정지 전이는 다음 배치가 복구하지 못한다. 개선 방향("오늘을 포함하는 정지 유무"로 판정)은 README에 기재
   - 조기 해제 시 상태는 즉시 `ACTIVE`로 바꾼다 (C-25) — 해제 당일에는 목록 상태(`ACTIVE`)와 출입 결과(거부, D-8)가 어긋난다. README에 기재
+
+### D-22. 도메인 입력 오류의 에러 코드
+
+- 관련: C-27 · FR-2.1 · FR-2.2 · NFR-8 (F1 리뷰 후 추가)
+- 원문: S-16 "회원 등록: 이름, 연락처" · S-17 "종류, 시작일, 기간(개월) 또는 횟수"
+- 선택지
+  - A: 도메인에서도 `COMMON_INVALID_INPUT` — 코드 증가 없음 / 도메인 구분 불가
+  - B: 전용 코드 추가 — 도메인별 코드가 뚜렷함 / 문서 · 코드 · TC 추가 수정
+- **결정**: B — `MEMBER_INVALID_INPUT` · `MEMBERSHIP_INVALID_INPUT` (400)
+  - Request Bean Validation 실패는 그대로 `COMMON_INVALID_INPUT`이다
+  - 도메인 생성 · 수정 검증 실패(VO 생성 실패 포함)는 전용 코드로 바꿔 던진다
+  - `type`별 조건 필수(기간제 개월 · 횟수제 횟수) 위반은 `MEMBERSHIP_INVALID_INPUT`이다
+- **근거**: VO의 `IllegalArgumentException`이 500으로 새지 않게 도메인에서 먼저 막는다 (NFR-8)
+- 남는 한계: 같은 입력 오류라도 검증 위치(Request · 도메인)에 따라 코드가 다르다
 
 ---
 
