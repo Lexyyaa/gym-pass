@@ -92,7 +92,7 @@ public class Membership extends BaseTimeEntity {
         this.status = MembershipStatus.ACTIVE;
         this.startDate = registration.startDate();
         this.months = membershipType.validityMonths(registration.months());
-        this.endDate = registration.startDate().plusMonths(this.months);
+        this.endDate = membershipType.calculateEndDate(registration.startDate(), registration.months());
         this.totalCount = membershipType.initialCount(registration.count());
         this.remainingCount = this.totalCount;
         this.price = registration.price();

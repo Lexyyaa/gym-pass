@@ -197,7 +197,7 @@ class MembershipRegisterApiTest {
         // given
         long memberId = fixture.createMember(5);
         LocalDate today = fixture.today();
-        fixture.insertPeriodMembership(memberId, "PAUSED", today.minusDays(10), today.plusDays(20));
+        fixture.insertPeriodMembership(memberId, "PAUSED", today.minusDays(10), today.plusDays(20), 1);
 
         // when
         ResultActions result = register(BRANCH_ID, period(memberId, today, 1));

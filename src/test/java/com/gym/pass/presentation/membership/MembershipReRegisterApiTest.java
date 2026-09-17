@@ -26,6 +26,7 @@ import org.springframework.test.web.servlet.ResultActions;
 class MembershipReRegisterApiTest {
 
     private static final long BRANCH_ID = 930_001L;
+    private static final long OTHER_BRANCH_ID = 930_002L;
 
     @Autowired
     private MockMvc mockMvc;
@@ -87,7 +88,7 @@ class MembershipReRegisterApiTest {
         // given
         long memberId = fixture.createMember(2);
         LocalDate today = fixture.today();
-        fixture.insertPeriodMembership(memberId, "ACTIVE", today.minusMonths(1), today.minusDays(1));
+        fixture.insertPeriodMembership(memberId, "ACTIVE", today.minusMonths(1), today.minusDays(1), 1);
 
         // when
         ResultActions result = register(MembershipRegisterApiTest.period(memberId, today, 1));
@@ -103,7 +104,7 @@ class MembershipReRegisterApiTest {
         // given
         long memberId = fixture.createMember(3);
         LocalDate today = fixture.today();
-        fixture.insertPeriodMembership(memberId, "PAUSED", today.minusMonths(1), today.minusDays(1));
+        fixture.insertPeriodMembership(memberId, "PAUSED", today.minusMonths(1), today.minusDays(1), 1);
 
         // when
         ResultActions result = register(MembershipRegisterApiTest.period(memberId, today, 1));
@@ -119,7 +120,7 @@ class MembershipReRegisterApiTest {
         // given
         long memberId = fixture.createMember(4);
         LocalDate today = fixture.today();
-        fixture.insertPeriodMembership(memberId, "ACTIVE", today.minusMonths(1), today);
+        fixture.insertPeriodMembership(memberId, "ACTIVE", today.minusMonths(1), today, 1);
 
         // when
         ResultActions result = register(MembershipRegisterApiTest.period(memberId, today.plusDays(1), 1));
@@ -136,8 +137,8 @@ class MembershipReRegisterApiTest {
         // given
         long memberId = fixture.createMember(5);
         LocalDate today = fixture.today();
-        fixture.insertPeriodMembership(memberId, "EXPIRED", today.minusMonths(1), today.plusDays(10));
-        fixture.insertPeriodMembership(memberId, "CANCELED", today.minusMonths(1), today.plusDays(10));
+        fixture.insertPeriodMembership(memberId, "EXPIRED", today.minusMonths(1), today.plusDays(10), 1);
+        fixture.insertPeriodMembership(memberId, "CANCELED", today.minusMonths(1), today.plusDays(10), 1);
 
         // when
         ResultActions result = register(MembershipRegisterApiTest.period(memberId, today, 1));
@@ -148,18 +149,12 @@ class MembershipReRegisterApiTest {
     }
 
     @Test
-    @DisplayName("등록 거부 검사는 전 지점을 본다 — 다른 지점의 유효 회원권이 있으면 409")
+    @DisplayName("[TC-2-18] 등록 거부 검사는 전 지점을 본다 — 다른 지점의 유효 회원권이 있으면 409이고 저장되지 않는다")
     void activeInOtherBranch() throws Exception {
         // given
         long memberId = fixture.createMember(6);
         LocalDate today = fixture.today();
-        jdbcTemplate.update(
-                "INSERT INTO membership (member_id, branch_id, type, status, start_date, end_date, months, price,"
-                        + " created_at, updated_at)"
-                        + " VALUES (?, 930002, 'PERIOD', 'ACTIVE', ?, ?, 1, 0, NOW(6), NOW(6))",
-                memberId,
-                today,
-                today.plusMonths(1));
+        fixture.insertPeriodMembership(memberId, OTHER_BRANCH_ID, "ACTIVE", today, today.plusMonths(1), 1);
 
         // when
         ResultActions result = register(MembershipRegisterApiTest.period(memberId, today, 1));
@@ -168,6 +163,7 @@ class MembershipReRegisterApiTest {
         result.andExpect(status().isConflict())
                 .andExpect(jsonPath("$.errorCode").value("MEMBERSHIP_ALREADY_ACTIVE"));
         assertThat(fixture.countMemberships(memberId)).isEqualTo(1);
+        assertThat(fixture.countHistories(memberId)).isZero();
     }
 
     private ResultActions register(Map<String, Object> body) throws Exception {

@@ -35,7 +35,7 @@ public class MembershipHistory extends BaseTimeEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "membership_id", insertable = false, updatable = false)
+    @Column(name = "membership_id", nullable = false, insertable = false, updatable = false)
     private Long membershipId;
 
     @Column(nullable = false)
