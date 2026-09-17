@@ -49,11 +49,11 @@ class MembershipRegisterTest {
     }
 
     @Test
-    @DisplayName("[TC-2-04] 횟수제 8/31 시작의 종료일은 2/28(월말 보정)이며 months 입력은 무시된다")
+    @DisplayName("[TC-2-04] 횟수제 8/31 시작의 종료일은 2/28(월말 보정)이다")
     void countEndDateEndOfMonth() {
         // given
         MembershipRegistration registration =
-                new MembershipRegistration(1L, 1L, MembershipType.COUNT, LocalDate.of(2026, 8, 31), 12, 5, 0L);
+                new MembershipRegistration(1L, 1L, MembershipType.COUNT, LocalDate.of(2026, 8, 31), null, 5, 0L);
 
         // when
         Membership membership = Membership.register(registration);
@@ -103,7 +103,7 @@ class MembershipRegisterTest {
     void countWithoutCount() {
         // given
         MembershipRegistration registration =
-                new MembershipRegistration(1L, 1L, MembershipType.COUNT, LocalDate.of(2026, 9, 17), 3, null, 0L);
+                new MembershipRegistration(1L, 1L, MembershipType.COUNT, LocalDate.of(2026, 9, 17), null, null, 0L);
 
         // when
         // then
@@ -131,6 +131,106 @@ class MembershipRegisterTest {
                 .isInstanceOf(MembershipException.class)
                 .extracting("errorCode")
                 .isEqualTo(ErrorCode.MEMBERSHIP_INVALID_INPUT);
+    }
+
+    @Test
+    @DisplayName("[TC-2-14] 기간제 120개월 · 횟수제 1000회는 상한 이내라 등록된다 (경계)")
+    void upperBoundAccepted() {
+        // given
+        LocalDate startDate = LocalDate.of(2026, 9, 17);
+        MembershipRegistration period = period(startDate, 120);
+        MembershipRegistration countType = count(startDate, 1000);
+
+        // when
+        Membership periodMembership = Membership.register(period);
+        Membership countMembership = Membership.register(countType);
+
+        // then
+        assertThat(periodMembership.getEndDate()).isEqualTo(LocalDate.of(2036, 9, 17));
+        assertThat(countMembership.getRemainingCount()).isEqualTo(1000);
+    }
+
+    @Test
+    @DisplayName("[TC-2-14] 기간제 121개월 · 횟수제 1001회는 MEMBERSHIP_INVALID_INPUT 예외가 발생한다")
+    void upperBoundExceeded() {
+        // given
+        LocalDate startDate = LocalDate.of(2026, 9, 17);
+        MembershipRegistration tooManyMonths = period(startDate, 121);
+        MembershipRegistration tooManyCount = count(startDate, 1001);
+
+        // when
+        // then
+        assertInvalidInput(tooManyMonths);
+        assertInvalidInput(tooManyCount);
+    }
+
+    @ParameterizedTest(name = "시작일 {0}")
+    @CsvSource({"9999-12-31", "+999999999-12-31", "+10000-01-01"})
+    @DisplayName("[TC-2-15] 종료일이 9999-12-31을 넘거나 계산할 수 없는 시작일이면 MEMBERSHIP_INVALID_INPUT 예외가 발생한다")
+    void endDateOutOfRange(String startDate) {
+        // given
+        LocalDate parsed = LocalDate.parse(startDate);
+        MembershipRegistration period = period(parsed, 1);
+        MembershipRegistration countType = count(parsed, 1);
+
+        // when
+        // then
+        assertInvalidInput(period);
+        assertInvalidInput(countType);
+    }
+
+    @Test
+    @DisplayName("[TC-2-15] 종료일이 정확히 9999-12-31이면 등록된다 (경계)")
+    void endDateAtMax() {
+        // given
+        MembershipRegistration registration = period(LocalDate.of(9999, 10, 31), 2);
+
+        // when
+        Membership membership = Membership.register(registration);
+
+        // then
+        assertThat(membership.getEndDate()).isEqualTo(LocalDate.of(9999, 12, 31));
+    }
+
+    @Test
+    @DisplayName("[TC-2-16] 기간제에 count, 횟수제에 months가 오면 MEMBERSHIP_INVALID_INPUT 예외가 발생한다")
+    void oppositeTypeValue() {
+        // given
+        LocalDate startDate = LocalDate.of(2026, 9, 17);
+        MembershipRegistration periodWithCount =
+                new MembershipRegistration(1L, 1L, MembershipType.PERIOD, startDate, 3, 5, 0L);
+        MembershipRegistration countWithMonths =
+                new MembershipRegistration(1L, 1L, MembershipType.COUNT, startDate, 3, 5, 0L);
+
+        // when
+        // then
+        assertInvalidInput(periodWithCount);
+        assertInvalidInput(countWithMonths);
+    }
+
+    @Test
+    @DisplayName("모르는 회원권 종류 문자열은 MEMBERSHIP_INVALID_INPUT 예외가 발생한다")
+    void unknownTypeName() {
+        // given
+        String value = "LIFETIME";
+
+        // when
+        // then
+        assertThatThrownBy(() -> MembershipType.from(value))
+                .isInstanceOf(MembershipException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.MEMBERSHIP_INVALID_INPUT);
+    }
+
+    private static void assertInvalidInput(MembershipRegistration registration) {
+        assertThatThrownBy(() -> Membership.register(registration))
+                .isInstanceOf(MembershipException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.MEMBERSHIP_INVALID_INPUT);
+    }
+
+    private static MembershipRegistration count(LocalDate startDate, Integer count) {
+        return new MembershipRegistration(1L, 1L, MembershipType.COUNT, startDate, null, count, 200_000L);
     }
 
     private static MembershipRegistration period(LocalDate startDate, Integer months) {

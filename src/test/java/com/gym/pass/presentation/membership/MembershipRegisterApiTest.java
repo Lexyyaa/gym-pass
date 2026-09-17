@@ -19,6 +19,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -149,13 +150,7 @@ class MembershipRegisterApiTest {
     void invalidValue(String label, String type, String field, int value) throws Exception {
         // given
         long memberId = fixture.createMember(4);
-        Map<String, Object> body = new HashMap<>();
-        body.put("memberId", memberId);
-        body.put("type", type);
-        body.put("startDate", "2026-09-17");
-        body.put("months", 1);
-        body.put("count", 10);
-        body.put("paymentAmount", 1000);
+        Map<String, Object> body = typed(memberId, type);
         body.put(field, value);
 
         // when
@@ -231,13 +226,7 @@ class MembershipRegisterApiTest {
     void missingTypeValue(String type, String missingField) throws Exception {
         // given
         long memberId = fixture.createMember(7);
-        Map<String, Object> body = new HashMap<>();
-        body.put("memberId", memberId);
-        body.put("type", type);
-        body.put("startDate", "2026-09-17");
-        body.put("months", 1);
-        body.put("count", 10);
-        body.put("paymentAmount", 1000);
+        Map<String, Object> body = typed(memberId, type);
         body.remove(missingField);
 
         // when
@@ -246,6 +235,75 @@ class MembershipRegisterApiTest {
         // then
         result.andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.errorCode").value("MEMBERSHIP_INVALID_INPUT"));
+        assertThat(fixture.countMemberships(memberId)).isZero();
+        assertThat(fixture.countHistories(memberId)).isZero();
+    }
+
+    static Stream<Arguments> overLimitValues() {
+        return Stream.of(Arguments.of("PERIOD", "months", 121), Arguments.of("COUNT", "count", 1001));
+    }
+
+    @ParameterizedTest(name = "{0} {1}={2}")
+    @MethodSource("overLimitValues")
+    @DisplayName("[TC-2-14] 기간제 121개월 · 횟수제 1001회면 400 MEMBERSHIP_INVALID_INPUT이고 저장되지 않는다")
+    void overLimit(String type, String field, int value) throws Exception {
+        // given
+        long memberId = fixture.createMember(11);
+        Map<String, Object> body = typed(memberId, type);
+        body.put(field, value);
+
+        // when
+        ResultActions result = register(BRANCH_ID, body);
+
+        // then
+        result.andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errorCode").value("MEMBERSHIP_INVALID_INPUT"));
+        assertThat(fixture.countMemberships(memberId)).isZero();
+        assertThat(fixture.countHistories(memberId)).isZero();
+    }
+
+    @ParameterizedTest(name = "시작일 {0}")
+    @ValueSource(strings = {"9999-12-31", "+999999999-12-31"})
+    @DisplayName("[TC-2-15] 종료일이 9999-12-31을 넘는 시작일이면 400 MEMBERSHIP_INVALID_INPUT이고 저장되지 않는다")
+    void endDateOutOfRange(String startDate) throws Exception {
+        // given
+        long memberId = fixture.createMember(12);
+        Map<String, Object> body = typed(memberId, "PERIOD");
+        body.put("startDate", startDate);
+
+        // when
+        ResultActions result = register(BRANCH_ID, body);
+
+        // then
+        result.andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errorCode").value("MEMBERSHIP_INVALID_INPUT"));
+        assertThat(fixture.countMemberships(memberId)).isZero();
+        assertThat(fixture.countHistories(memberId)).isZero();
+    }
+
+    static Stream<Arguments> oppositeTypeValues() {
+        return Stream.of(
+                Arguments.of("PERIOD", "count", 5, "MEMBERSHIP_INVALID_INPUT"),
+                Arguments.of("COUNT", "months", 3, "MEMBERSHIP_INVALID_INPUT"),
+                Arguments.of("PERIOD", "count", 0, "COMMON_INVALID_INPUT"),
+                Arguments.of("COUNT", "months", -1, "COMMON_INVALID_INPUT"));
+    }
+
+    @ParameterizedTest(name = "{0}에 {1}={2} → {3}")
+    @MethodSource("oppositeTypeValues")
+    @DisplayName("[TC-2-16] 기간제에 count · 횟수제에 months가 오면 400이고 저장되지 않는다 (0 · 음수는 요청 검증에서 COMMON)")
+    void oppositeTypeValue(String type, String field, int value, String errorCode) throws Exception {
+        // given
+        long memberId = fixture.createMember(13);
+        Map<String, Object> body = typed(memberId, type);
+        body.put(field, value);
+
+        // when
+        ResultActions result = register(BRANCH_ID, body);
+
+        // then
+        result.andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errorCode").value(errorCode));
         assertThat(fixture.countMemberships(memberId)).isZero();
         assertThat(fixture.countHistories(memberId)).isZero();
     }
@@ -305,6 +363,12 @@ class MembershipRegisterApiTest {
                 .header(BranchIdArgumentResolver.HEADER, branchId)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(body)));
+    }
+
+    /** 종류에 맞는 값만 담은 정상 본문 (시작일 2026-09-17). */
+    private static Map<String, Object> typed(long memberId, String type) {
+        LocalDate startDate = LocalDate.of(2026, 9, 17);
+        return "PERIOD".equals(type) ? period(memberId, startDate, 1) : count(memberId, startDate, 10);
     }
 
     static Map<String, Object> period(long memberId, LocalDate startDate, int months) {

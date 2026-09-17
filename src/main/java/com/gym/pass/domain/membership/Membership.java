@@ -38,6 +38,9 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class Membership extends BaseTimeEntity {
 
+    /** 저장 가능한 최대 날짜 (C-28 · MySQL DATE 상한). */
+    private static final LocalDate MAX_DATE = LocalDate.of(9999, 12, 31);
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -109,5 +112,12 @@ public class Membership extends BaseTimeEntity {
             throw new MembershipException(ErrorCode.MEMBERSHIP_INVALID_INPUT, "결제 금액은 0 이상이어야 합니다.");
         }
         registration.type().validate(registration.months(), registration.count());
+        if (registration.startDate().isAfter(MAX_DATE)) {
+            throw new MembershipException(ErrorCode.MEMBERSHIP_INVALID_INPUT, "시작일은 " + MAX_DATE + " 이전이어야 합니다.");
+        }
+        LocalDate endDate = registration.type().calculateEndDate(registration.startDate(), registration.months());
+        if (endDate.isAfter(MAX_DATE)) {
+            throw new MembershipException(ErrorCode.MEMBERSHIP_INVALID_INPUT, "종료일이 " + MAX_DATE + "를 넘습니다.");
+        }
     }
 }

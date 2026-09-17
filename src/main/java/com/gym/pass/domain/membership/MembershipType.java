@@ -13,8 +13,8 @@ public enum MembershipType {
     /** 기간제. 종료일 = 시작일 + 개월 (D-6), 차감 없음. */
     PERIOD {
         @Override
-        public LocalDate calculateEndDate(LocalDate startDate, Integer months) {
-            return startDate.plusMonths(months);
+        public int validityMonths(Integer months) {
+            return months;
         }
 
         @Override
@@ -29,15 +29,16 @@ public enum MembershipType {
 
         @Override
         void validate(Integer months, Integer count) {
-            requirePositive(months, "기간제는 개월 수(months)가 1 이상이어야 합니다.");
+            requireInRange(months, MAX_MONTHS, "기간제는 개월 수(months)가 1 이상 " + MAX_MONTHS + " 이하여야 합니다.");
+            requireAbsent(count, "기간제에는 이용 횟수(count)를 보낼 수 없습니다.");
         }
     },
 
     /** 횟수제. 종료일 = 시작일 + 6개월 (D-7), 출입 시 차감. */
     COUNT {
         @Override
-        public LocalDate calculateEndDate(LocalDate startDate, Integer months) {
-            return startDate.plusMonths(COUNT_VALIDITY_MONTHS);
+        public int validityMonths(Integer months) {
+            return COUNT_VALIDITY_MONTHS;
         }
 
         @Override
@@ -52,15 +53,37 @@ public enum MembershipType {
 
         @Override
         void validate(Integer months, Integer count) {
-            requirePositive(count, "횟수제는 이용 횟수(count)가 1 이상이어야 합니다.");
+            requireInRange(count, MAX_COUNT, "횟수제는 이용 횟수(count)가 1 이상 " + MAX_COUNT + " 이하여야 합니다.");
+            requireAbsent(months, "횟수제에는 개월 수(months)를 보낼 수 없습니다.");
         }
     };
 
-    /** 횟수제 유효기간 (D-7 가정). */
+    /** 횟수제 유효기간 (D-7 가정 · C-32 enum 상수 유지). */
     private static final int COUNT_VALIDITY_MONTHS = 6;
 
-    /** 종료일(당일 포함)을 계산한다. */
-    public abstract LocalDate calculateEndDate(LocalDate startDate, Integer months);
+    /** 기간제 개월 수 상한 (C-28). */
+    private static final int MAX_MONTHS = 120;
+
+    /** 횟수제 횟수 상한 (C-28). */
+    private static final int MAX_COUNT = 1000;
+
+    /** 요청 문자열을 종류로 바꾼다. 모르는 값은 MEMBERSHIP_INVALID_INPUT. */
+    public static MembershipType from(String value) {
+        for (MembershipType type : values()) {
+            if (type.name().equals(value)) {
+                return type;
+            }
+        }
+        throw new MembershipException(ErrorCode.MEMBERSHIP_INVALID_INPUT, "회원권 종류는 PERIOD 또는 COUNT여야 합니다.");
+    }
+
+    /** 이 회원권의 개월 수. 기간제 = 요청 개월, 횟수제 = 6 (D-24). */
+    public abstract int validityMonths(Integer months);
+
+    /** 종료일(당일 포함)을 계산한다. 시작일 + 개월 수. */
+    public LocalDate calculateEndDate(LocalDate startDate, Integer months) {
+        return startDate.plusMonths(validityMonths(months));
+    }
 
     /** 등록 시 잔여 횟수. 차감이 없는 종류는 null. */
     public abstract Integer initialCount(Integer count);
@@ -68,11 +91,17 @@ public enum MembershipType {
     /** 출입 시 횟수 차감 대상인지. */
     public abstract boolean deductible();
 
-    /** 종류별 필수 값 검증. 위반 시 MEMBERSHIP_INVALID_INPUT (D-22). */
+    /** 종류별 필수 값 · 상한 · 반대 종류 값 검증. 위반 시 MEMBERSHIP_INVALID_INPUT (D-22 · D-23). */
     abstract void validate(Integer months, Integer count);
 
-    private static void requirePositive(Integer value, String detail) {
-        if (value == null || value < 1) {
+    private static void requireInRange(Integer value, int max, String detail) {
+        if (value == null || value < 1 || value > max) {
+            throw new MembershipException(ErrorCode.MEMBERSHIP_INVALID_INPUT, detail);
+        }
+    }
+
+    private static void requireAbsent(Integer value, String detail) {
+        if (value != null) {
             throw new MembershipException(ErrorCode.MEMBERSHIP_INVALID_INPUT, detail);
         }
     }

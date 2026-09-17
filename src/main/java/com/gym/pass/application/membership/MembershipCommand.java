@@ -21,7 +21,7 @@ public final class MembershipCommand {
 
         public MembershipRegistration toRegistration() {
             return new MembershipRegistration(
-                    memberId, branchId, MembershipType.valueOf(type), startDate, months, count, paymentAmount);
+                    memberId, branchId, MembershipType.from(type), startDate, months, count, paymentAmount);
         }
     }
 }
